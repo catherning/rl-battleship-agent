@@ -1,13 +1,12 @@
-import numpy as np
-
 import time
-from battleship.Field import print_battlefield, print_all_battlefield
+
+from battleship.Field import print_all_battlefield
 
 
 class Battlefield():
-    '''
+    """
     Place where two agents are playing N fights to be evaluated
-    '''
+    """
 
     def __init__(self, player1, player2, game, display=None):
         self.player1 = player1
@@ -17,10 +16,10 @@ class Battlefield():
         self.display = display  # fusion display and verbose ?
 
     def single_fight(self, verbose=False):
-        '''
+        """
         Having two players play one game until it finished print result
         Used to evaluate performance of trained model against previous version
-        '''
+        """
 
         players = [self.player2, None, self.player1]
         ships, damages = self.game.get_clean_field()
@@ -58,37 +57,37 @@ class Battlefield():
             # self.display(board)
         return self.game.check_finish_game(ships, -self.current_player)
 
-    def fight(self, num, verbose=False):
-        '''
-        Evaluate new model agains old, playing N games
-        '''
-        num = int(num / 2)
-
-        oneWon, twoWon, draws = self.newVsOld(num, verbose)
-
-        self.player1, self.player2 = self.player2, self.player1
-
-        two_t, one_t, draws_t = self.newVsOld(num, verbose)
-        oneWon += one_t
-        twoWon += two_t
-        draws += draws_t
-
-        return oneWon, twoWon, draws
-
-    def newVsOld(self, num, verbose):
-        oneWon = 0
-        twoWon = 0
+    def new_vs_old(self, num, verbose):
+        one_won = 0
+        two_won = 0
         draws = 0
         for play_num in range(num):
             begin = time.time()
-            gameResult = self.single_fight(verbose=verbose)
-            if gameResult == 1:
-                oneWon += 1
-            elif gameResult == -1:
-                twoWon += 1
+            game_result = self.single_fight(verbose=verbose)
+            if game_result == 1:
+                one_won += 1
+            elif game_result == -1:
+                two_won += 1
             else:
                 draws += 1
 
-            print('play', play_num, 'winner', gameResult, 'time', time.time() - begin)
+            print('play', play_num, 'winner', game_result, 'time', time.time() - begin)
 
-        return oneWon, twoWon, draws
+        return one_won, two_won, draws
+
+    def fight(self, num, verbose=False):
+        """
+        Evaluate new model agains old, playing N games
+        """
+        num = int(num / 2)
+
+        one_won, two_won, draws = self.new_vs_old(num, verbose)
+
+        self.player1, self.player2 = self.player2, self.player1
+
+        two_t, one_t, draws_t = self.new_vs_old(num, verbose)
+        one_won += one_t
+        two_won += two_t
+        draws += draws_t
+
+        return one_won, two_won, draws

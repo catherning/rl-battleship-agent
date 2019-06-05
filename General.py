@@ -154,7 +154,7 @@ class General():
             print('FIGHT AGAINST PREVIOUS VERSION')
             battlefield = Battlefield(lambda x, y: np.argmax(pmcts.get_action_probabilities(x, y, t=0)),
                                       lambda x, y: np.argmax(nmcts.get_action_probabilities(x, y, t=0)), self.game)
-            pwins, nwins, draws = battlefield.fight(self.compare, False)
+            pwins, nwins, draws = battlefield.fight(self.compare, verbose=True)
 
             print('NEW/PREV WINS : %d / %d ; DRAWS : %d' % (nwins, pwins, draws))
             if pwins + nwins > 0 and float(nwins) / (pwins + nwins) < self.update_thr:
