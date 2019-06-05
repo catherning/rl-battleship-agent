@@ -1,10 +1,17 @@
 from General import General
 from battleship.Field import Field as field
-from battleship.nnet import nnet as nn
+from battleship.nnet import CNNet, ResidualNNet
 
 if __name__ == "__main__":
+
+    network = "residual"
+
     f = field(6)  # init battlefield
-    nnet = nn(f)  # init NN
+
+    if network == "residual":
+        nnet = ResidualNNet(f)  # init NN
+    elif network == "cnn":
+        nnet = CNNet(f)
 
     # define where to store\get checkpoint and model
     checkpoint = './temp/'

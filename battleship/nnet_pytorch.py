@@ -159,9 +159,9 @@ class ResidualNNet(NNet):
         5. Batch normalisation
         6. A skip connection that adds the input to the block
         7. A rectifier non-linearity
-
-        :param x:
-        :return:
+        
+        :param x: 
+        :return: 
         """
 
         output_layer1 = self.cnn_layer(x)
@@ -185,7 +185,7 @@ class ResidualNNet(NNet):
         7. A tanh non-linearity outputting a scalar in the range [−1, 1]
         """
 
-        activ_3 = self.cnn_layer(x, num_channels=1, filter_size=1)
+        activ_3 = self.cnn_layer(self, x, num_channels=1, filter_size=1)
 
         flatt_4 = Flatten()(activ_3)
         dense_5 = Dense(self.value_head_dense, activation='relu')(flatt_4)
@@ -202,7 +202,7 @@ class ResidualNNet(NNet):
            logit probabilities for all intersections and the pass move
         """
 
-        activ_3 = self.cnn_layer(x, num_channels=1, filter_size=1)
+        activ_3 = self.cnn_layer(self, x, num_channels=1, filter_size=1)
 
         flatt_4 = Flatten()(activ_3)
         dense_4 = Dense(self.action_size, activation='softmax',
