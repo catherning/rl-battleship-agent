@@ -151,6 +151,7 @@ class Field():
             self.damages[x][y] = 1
             self.ships[x][y] = -1
             return player # give next step
+            # XXX When he manages to fire a ship, the player can play again ??
         
         return -player # alternate player
                 
@@ -234,7 +235,7 @@ class Field():
             
         return np.array(v)
 
-        
+    # TODO change to game_finished => True or False ?
     def check_finish_game(self, ships, player):
         '''
         See if there is something left floating..
