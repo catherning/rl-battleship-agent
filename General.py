@@ -10,10 +10,10 @@ from Battlefield import Battlefield
 from MCTS import MCTS
 
 
-class General():
-    '''
+class General:
+    """
     Logic of the agent training, NN will carry out action probabilities and states values
-    '''
+    """
 
     def __init__(self, game, nnet):
         self.game = game
@@ -31,6 +31,7 @@ class General():
         self.compare = 40
         self.cpuct = 1  # constant determining the level of exploration
         self.mcts = MCTS(self.game, self.nnet, self.sims, self.cpuct)
+
         self.checkpoint = './temp/'
         self.load_model = False
         self.models_folder = './models/'
@@ -39,10 +40,10 @@ class General():
         self.last_steps = []
 
     def run_episode(self):
-        '''
+        """
         Training episode - a single game of two agents that are trying to get as much hits as possible
         having missing hits(water) and drown ship cells
-        '''
+        """
 
         batch = []
         ships, damages = self.game.get_clean_field()
@@ -63,6 +64,7 @@ class General():
             for a, b in sym:
                 batch.append([a, self.player, b, None])
 
+            # Random play ??
             action = np.random.choice(len(a_prob), p=a_prob)
             ships, damages, player = self.game.get_next_state(ships, damages, self.player, action)
 
@@ -113,30 +115,30 @@ class General():
                 return res
 
     def fight(self):
-        '''
+        """
         Execute N of fight episodes, collect results, perform model training and evaluation with previous version
-        '''
+        """
 
         for i in range(1, self.num_iterations + 1):
             print('iteration: ', str(i))
 
             if not self.skip_first_play or i > 1:
-                iterationTrainExamples = deque([], maxlen=self.len_queue)
+                iteration_train_examples = deque([], maxlen=self.len_queue)
                 # end = time.time()
 
                 for eps in range(self.epochs):
                     self.mcts = MCTS(self.game, self.nnet, self.sims, self.cpuct)
-                    iterationTrainExamples += self.run_episode()
+                    iteration_train_examples += self.run_episode()
 
                     # end = time.time()
 
-                self.history.append(iterationTrainExamples)
+                self.history.append(iteration_train_examples)
 
             if len(self.history) > self.len_history:
                 print("len(history) =", len(self.history), " => remove the oldest trainExamples")
                 self.history.pop(0)
 
-            self.saveTrainExamples(i - 1)
+            self.save_train_examples(i - 1)
 
             trainExamples = []
             for e in self.history:
@@ -167,40 +169,33 @@ class General():
 
                 # Support stuff
 
-    def getCheckpointFile(self, iteration):
-        '''
-        Load checkpoint
-        '''
-        return 'checkpoint_' + str(iteration) + '.pth.tar'
-
-    def saveTrainExamples(self, iteration):
-        '''
+    def save_train_examples(self, iteration):
+        """
         Save played games and results to reuse them when training model
-        '''
+        """
 
         folder = self.checkpoint
         if not os.path.exists(folder):
             os.makedirs(folder)
-        filename = os.path.join(folder, self.getCheckpointFile(iteration) + ".examples")
+        filename = os.path.join(folder, 'checkpoint_' + str(iteration) + '.pth.tar' + ".examples")
         with open(filename, "wb+") as f:
             Pickler(f).dump(self.history)
-        f.closed
 
-    def loadTrainExamples(self):
-        '''
+    def load_train_examples(self):
+        """
         Load played games and results, reuse them for training model
-        '''
-        modelFile = os.path.join(self.args.load_folder_file[0], self.args.load_folder_file[1])
-        examplesFile = modelFile + ".examples"
-        if not os.path.isfile(examplesFile):
-            print(examplesFile)
+        """
+        model_file = os.path.join(self.args.load_folder_file[0], self.args.load_folder_file[1])
+        examples_file = model_file + ".examples"
+        if not os.path.isfile(examples_file):
+            print(examples_file)
             r = input("File with trainExamples not found. Continue? [y|n]")
             if r != "y":
                 sys.exit()
         else:
             print("File with trainExamples found. Read it.")
-            with open(examplesFile, "rb") as f:
+            with open(examples_file, "rb") as f:
                 self.history = Unpickler(f).load()
-            f.closed
+
             # examples based on the model were already collected (loaded)
-            self.skipFirstSelfPlay = True
+            self.skip_first_play = True

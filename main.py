@@ -26,6 +26,6 @@ if __name__ == "__main__":
 
     if load_model:
         print("Load trainExamples from file")
-        g.loadTrainExamples()
+        g.load_train_examples()
 
     g.fight()

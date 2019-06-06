@@ -3,7 +3,7 @@ import time
 from battleship.Field import print_all_battlefield
 
 
-class Battlefield():
+class Battlefield:
     """
     Place where two agents are playing N fights to be evaluated
     """
@@ -77,7 +77,7 @@ class Battlefield():
 
     def fight(self, num, verbose=False):
         """
-        Evaluate new model agains old, playing N games
+        Evaluate new model agains old, playing N games, half of which new is player 1, other half, new is player 2
         """
         num = int(num / 2)
 
