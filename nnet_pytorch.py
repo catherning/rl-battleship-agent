@@ -2,11 +2,42 @@ import os
 import sys
 
 import numpy as np
-from keras.layers import Conv2D, BatchNormalization, Activation, Reshape, Dropout, Flatten, Dense, Add
+import torch
+import torch.nn as nn
 from keras.models import *
 from keras.optimizers import Adam
 
 sys.path.append('..')
+
+
+def pad_2d(input_, padding, k_h, k_w, s_h=1, s_w=1):
+    """
+    Adds padding like in Tensorflow/Keras for Conv2D
+    https://gist.github.com/Ujjwal-9/e13f163d8d59baa40e741fc387da67df
+
+    :param input_:
+    :param padding:
+    :param k_h:
+    :param k_w:
+    :param s_h:
+    :param s_w:
+    :return:
+    """
+    if padding == 'valid':
+        return input_
+    elif padding == 'same':
+        in_height, in_width = input_.size(2), input_.size(3)
+        out_height = int(np.ceil(float(in_height) / float(s_h)))
+        out_width = int(np.ceil(float(in_width) / float(s_w)))
+
+        pad_along_height = max((out_height - 1) * s_h + k_h - in_height, 0)
+        pad_along_width = max((out_width - 1) * s_w + k_w - in_width, 0)
+        pad_top = pad_along_height // 2
+        pad_bottom = pad_along_height - pad_top
+        pad_left = pad_along_width // 2
+        pad_right = pad_along_width - pad_left
+        output = F.pad(input_, (pad_left, pad_right, pad_top, pad_bottom))
+        return output
 
 
 class NNet:
@@ -16,7 +47,7 @@ class NNet:
         self.action_size = game.get_num_actions()  # all
 
         # Model hyper-parameters
-        self.num_channels = 256
+        self.num_filters = 256
         self.filter_size = 3
 
         # Training
@@ -27,23 +58,40 @@ class NNet:
         self.input_layer = Input(shape=(self.w, self.h))
         self.model = None
 
-    def cnn_layer(self, x, num_channels=None, filter_size=None, activation='linear', padding='same'):
+    def cnn_layer(self, x, out_filters=None, filter_size=None, activation='linear', padding='same'):
+        """
 
-        if num_channels is None:
-            num_channels = self.num_channels
+        :param x: input of size (batch_size,in_channels=out_channels,self.h,self.w)
+        :param out_filters:
+        :param filter_size:
+        :param activation:
+        :param padding:
+        :return: a_conv1 of size (batch_size, out_channels, self.h, self.w)
+        """
+
+        if out_filters is None:
+            out_filters = self.num_filters
+            in_channels = out_filters
+        else:
+            in_channels = self.num_filters
+
         if filter_size is None:
             filter_size = self.filter_size
 
-        conv2d_1 = Conv2D(num_channels, filter_size,
-                          activation=activation, padding=padding)(x)
-        bnorm_1 = BatchNormalization(axis=3)(conv2d_1)
-        a_conv1 = Activation('relu')(bnorm_1)
+        padded_x = pad_2d(x, padding, filter_size, filter_size)
+        conv2d_1 = nn.Conv2d(in_channels, out_filters, filter_size)(padded_x)
+        # activation is always linear for now, so do nothing after conv2D
+
+        bnorm_1 = nn.BatchNorm2d(out_filters)(conv2d_1)
+        a_conv1 = nn.ReLU()(bnorm_1)
+
         return a_conv1
 
     def train(self, examples):
         """
         Train the network with provided data
         """
+        # todo: convert to pytorch
         input_fields, target_a_prob, target_values = list(zip(*examples))
         input_fields = np.asarray(input_fields)
         target_a_prob = np.asarray(target_a_prob)
@@ -56,7 +104,7 @@ class NNet:
         Given cell, calculate where to step next from the given cell,
         output most probable action and value for the next state
         """
-
+        # todo: convert to pytorch
         field = field[np.newaxis, :, :]
         a_prob, value = self.model.predict(field)
         return a_prob[0], value[0]
@@ -87,6 +135,7 @@ class CNNet(NNet):
 
         self.a_prob, self.values = self.cnn_net()
 
+        # todo: change to pytorch
         self.model = Model(inputs=self.input_layer, outputs=[
             self.a_prob, self.values])
         self.model.compile(loss=['categorical_crossentropy',
@@ -99,25 +148,31 @@ class CNNet(NNet):
         :return: [a_prob, values]
         """
 
-        # x= torch.unsqueeze(self.input_layer,1)
-
-        x = Reshape((self.w, self.h, 1))(self.input_layer)
+        batch_size = self.input_layer[0]
+        x = self.input_layer.reshape((batch_size, 1, self.w, self.h))
 
         a_conv1 = self.cnn_layer(x)
         a_conv2 = self.cnn_layer(a_conv1)
         a_conv3 = self.cnn_layer(a_conv2, padding='valid')
         a_conv4 = self.cnn_layer(a_conv3, padding='valid')
 
-        a_conv4_flat = Flatten()(a_conv4)
+        a_conv4_flat = a_conv4.view(a_conv4.shape[0], -1)
 
-        dense_1 = Dropout(self.dropout)(Activation('relu')(
-            BatchNormalization(axis=1)(Dense(1024)(a_conv4_flat))))
-        dense_2 = Dropout(self.dropout)(Activation('relu')(
-            BatchNormalization(axis=1)(Dense(512)(dense_1))))
+        fc_1 = nn.Linear(a_conv4_flat.shape[1], 1024)
+        batch_norm_1 = nn.BatchNorm1d(fc_1.shape[1])(fc_1)
+        act_1 = nn.ReLU()(batch_norm_1)
+        dense_1 = nn.Dropout(p=self.dropout)(act_1)
 
-        a_prob = Dense(self.action_size, activation='softmax',
-                       name='a_prob')(dense_2)
-        values = Dense(1, activation='tanh', name='values')(dense_2)
+        fc_2 = nn.Linear(dense_1.shape[1], 512)
+        batch_norm_2 = nn.BatchNorm1d(fc_2.shape[1])(fc_2)
+        act_2 = nn.ReLU()(batch_norm_2)
+        dense_2 = nn.Dropout(p=self.dropout)(act_2)
+
+        fc_prob = nn.Linear(dense_2.shape[1], self.action_size)(dense_2)
+        a_prob = nn.Softmax()(fc_prob)
+
+        fc_values = nn.Linear(dense_2.shape[1], 1)(dense_2)
+        values = nn.Tanh()(fc_values)
 
         return [a_prob, values]
 
@@ -132,6 +187,7 @@ class ResidualNNet(NNet):
 
         self.a_prob, self.values = self.residual_net()
 
+        # todo: change to pytorch
         self.model = Model(inputs=self.input_layer, outputs=[
             self.a_prob, self.values])
         self.model.compile(loss=['categorical_crossentropy',
@@ -144,7 +200,8 @@ class ResidualNNet(NNet):
         3. A rectifier non-linearity
         """
 
-        x = Reshape((self.w, self.h, 1))(self.input_layer)
+        batch_size = self.input_layer[0]
+        x = self.input_layer.reshape((batch_size, 1, self.w, self.h))
         output = self.cnn_layer(x)
 
         return output
@@ -163,14 +220,13 @@ class ResidualNNet(NNet):
         :param x: 
         :return: 
         """
-
         output_layer1 = self.cnn_layer(x)
 
-        convl_4 = Conv2D(self.num_channels, self.filter_size,
-                         activation='linear', padding='same')(output_layer1)
-        bnorm_5 = BatchNormalization(axis=3)(convl_4)
-        merge_6 = Add()([bnorm_5, x])
-        activ_7 = Activation('relu')(merge_6)
+        padded_x = pad_2d(x, "same", self.filter_size, self.filter_size)
+        convl_4 = nn.Conv2d(output_layer1.shape[1], self.num_filters, self.filter_size)(padded_x)
+        bnorm_5 = nn.BatchNorm2d(self.num_filters)(convl_4)
+        merge_6 = torch.cat((bnorm_5, x))
+        activ_7 = nn.ReLU()(merge_6)
 
         return activ_7
 
@@ -183,15 +239,19 @@ class ResidualNNet(NNet):
         5. A rectifier non-linearity
         6. A fully connected linear layer to a scalar
         7. A tanh non-linearity outputting a scalar in the range [−1, 1]
+
+        :param x:
+        :return:
         """
+        activ_3 = self.cnn_layer(x, out_filters=1, filter_size=1)
+        flatt_4 = activ_3.view(activ_3.shape[0], -1)
 
-        activ_3 = self.cnn_layer(self, x, num_channels=1, filter_size=1)
+        fc_5 = nn.Linear(flatt_4.shape[1], self.value_head_dense)
+        dense_5 = nn.ReLU()(fc_5)
+        fc_6 = nn.Linear(dense_5.shape[1], 1)
+        values = nn.Tanh()(fc_6)
 
-        flatt_4 = Flatten()(activ_3)
-        dense_5 = Dense(self.value_head_dense, activation='relu')(flatt_4)
-        dense_6 = Dense(1, activation='tanh', name='value_head')(dense_5)
-
-        return dense_6
+        return values
 
     def policy_head(self, x):
         """
@@ -200,15 +260,18 @@ class ResidualNNet(NNet):
         3. A rectifier non-linearity
         4. A fully connected linear layer that outputs a vector of size 192 + 1 = 362 corresponding to
            logit probabilities for all intersections and the pass move
+
+        :param x:
+        :return:
         """
+        activ_3 = self.cnn_layer(x, out_filters=1, filter_size=1)
 
-        activ_3 = self.cnn_layer(self, x, num_channels=1, filter_size=1)
+        flatt_4 = activ_3.view(activ_3.shape[0], -1)
 
-        flatt_4 = Flatten()(activ_3)
-        dense_4 = Dense(self.action_size, activation='softmax',
-                        name='policy_head')(flatt_4)
+        fc_4 = nn.Linear(flatt_4.shape[1], self.action_size)
+        a_prob = nn.Softmax()(fc_4)
 
-        return dense_4
+        return a_prob
 
     def residual_net(self):
         """
