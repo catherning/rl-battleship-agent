@@ -8,6 +8,7 @@ import numpy as np
 
 from Battlefield import Battlefield
 from MCTS import MCTS
+from battleship.Field import print_all_battlefield
 
 
 class General:
@@ -38,6 +39,7 @@ class General:
         self.best_model_file = 'best.pth.tar'
         self.len_history = 40
         self.last_steps = []
+        self.display = False
 
     def run_episode(self):
         """
@@ -71,18 +73,6 @@ class General:
             if player == self.player:
                 self.hits[player + 1] += 1
 
-            # print('player, step', self.player, self.hits[self.player+1], step)
-            # print('Ships | Hits ')
-            # print_all_battlefield(ships, damages, visible_area)
-            # visible_area = self.game.get_visible_area(ships, damages)
-            # print('player, step', self.player, self.hits[0], self.hits[2], step)
-            # print('ships')
-            # print_battlefield(ships)
-            # print('damages')
-            # print_battlefield(damages)
-            # print('visible_area')
-            # print_battlefield(visible_area)
-
             end = self.game.check_finish_game(ships, self.player)
             self.player = player
 
@@ -100,16 +90,8 @@ class General:
 
                 self.last_steps.append(step)
 
-                # print('player, step', self.player, self.hits[self.player+1], step, sum(self.last_steps)/len(self.last_steps))
-                # print('Ships')
-                # print_battlefield(ships)
-                # print('Hits')
-                # print_battlefield(damages)
-                # print('Visible_area')
-                # visible_area = self.game.get_visible_area(ships, damages)
-                # print_battlefield(visible_area)
-                # print('Ships | Hits ')
-                # print_all_battlefield(ships, damages, visible_area)
+                if self.display:
+                    print_all_battlefield(ships, damages)
 
                 res = [(x[0], x[2], winner * ((-1) ** (x[1] != self.player))) for x in batch]
                 return res
@@ -155,8 +137,9 @@ class General:
 
             print('FIGHT AGAINST PREVIOUS VERSION')
             battlefield = Battlefield(lambda x, y: np.argmax(pmcts.get_action_probabilities(x, y, t=0)),
-                                      lambda x, y: np.argmax(nmcts.get_action_probabilities(x, y, t=0)), self.game)
-            pwins, nwins, draws = battlefield.fight(self.compare, verbose=True)
+                                      lambda x, y: np.argmax(nmcts.get_action_probabilities(x, y, t=0)), self.game,
+                                      display=False)
+            pwins, nwins, draws = battlefield.fight(self.compare)
 
             print('NEW/PREV WINS : %d / %d ; DRAWS : %d' % (nwins, pwins, draws))
             if pwins + nwins > 0 and float(nwins) / (pwins + nwins) < self.update_thr:
