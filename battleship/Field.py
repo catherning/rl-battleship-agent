@@ -26,6 +26,14 @@ class Field:
         self.n = n
         self.placing_limit = n * n
 
+        # todo create sizes and counts depending of board size n
+        self.ship_sizes = [2, 3]  # , 4]
+        self.ship_count = [2, 1]  # , 1]
+        # ship_sizes = [2, 3, 4, 5]
+        # ship_count = [4, 3, 2, 1]
+        # ship_sizes = [2, 3, 4]
+        # ship_count = [4, 2, 1]
+
         self.ships = self.init_2d_arr(n)
         self.damages = self.init_2d_arr(n)
         # self.opponent_ships = self.init_ships(n)
@@ -33,15 +41,6 @@ class Field:
         # self.generate_ships(self.opponent_ships)
         self.ship_cells = self.count_alive_ship_cells(self.ships)
 
-        # todo create sizes and counts depending of board size n
-        self.ship_sizes = [2, 3]  # , 4]
-        self.ship_count = [2, 1]  # , 1]
-        # ship_sizes = [2, 3, 4, 5]
-        # ship_count = [4, 3, 2, 1]
-
-        # ship_sizes = [2, 3, 4]
-        # ship_count = [4, 2, 1]
-        # damages_name_offser = 4
 
     def init_2d_arr(self, n):
         """
@@ -230,7 +229,6 @@ class Field:
 
         return np.array(v)
 
-    # TODO change to game_finished => True or False ?
     def check_finish_game(self, ships, player):
         """
         See if there is something left floating..
