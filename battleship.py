@@ -7,8 +7,8 @@ import numpy as np
 class Field:
     """
     Logic of the game, how ships should be placed and how winner determined
-    
-    Assumptions and rules: 
+
+    Assumptions and rules:
     1. Ships align strategy is out of scope NN
     2. Agent is given with square area, where
         a) 0 means no data, fire at the cell is possible
@@ -16,7 +16,7 @@ class Field:
         c) -1 means shooting water with no success
     3. Ships cannot be placed near to the border => fixme WHY THE HELL NOT ?
     4. There should be distance of >1 between ships => fixme again, remove these rules ?
-    5. Only ships with sizes more than 1 are available, because it is impossible to gain 
+    5. Only ships with sizes more than 1 are available, because it is impossible to gain
        insights about places of single cell ships, random will perform the same as NN => xxx still to consider ? because original game has them
     6. To win, player must hit more ship cells
     """
@@ -34,42 +34,27 @@ class Field:
         # ship_sizes = [2, 3, 4]
         # ship_count = [4, 2, 1]
 
-        self.ships = self.init_2d_arr(n)
-        self.damages = self.init_2d_arr(n)
-        # self.opponent_ships = self.init_ships(n)
+        self.field_of_ships = np.zeros([n, n])
+        self.field_of_damages = np.zeros([n, n])
         self.generate_ships()
-        # self.generate_ships(self.opponent_ships)
-        self.ship_cells = self.count_alive_ship_cells(self.ships)
+        self.num_alive_ship_cells = self.count_alive_ship_cells(self.field_of_ships)
 
-
-    def init_2d_arr(self, n):
-        """
-        Initialize 2D array with zeros
-        """
-
-        # todo use np.zeros here directly so that we don't convert to np.arrays each time later ? if we still use np
-        # todo and if there's no place where it must not be np.array
-        arr = [None] * n
-        for i in range(n):
-            arr[i] = [0] * n
-
-        return arr
 
     def write_placement(self, ships, x, y, z, new_ship_size):
         """
         Write ship signature onto the battlefield
         """
 
-        x_range = [x, x + (1 - z) + new_ship_size * z]
-        y_range = [y, y + z + new_ship_size * (1 - z)]
+        x_range = range(x, x + (1 - z) + new_ship_size * z)
+        y_range = range(y, y + z + new_ship_size * (1 - z))
 
-        for xi in range(x_range[0], x_range[1]):
-            for yi in range(y_range[0], y_range[1]):
-                ships[xi][yi] = 1
+        for x_i in x_range:
+            for y_i in y_range:
+                ships[x_i][y_i] = 1
 
     def check_placement(self, ships, x, y, z, new_ship_size):
         """
-        Check whether it is possible to place the ship signature 
+        Check whether it is possible to place the ship signature
         on battlefield or not
         """
 
@@ -95,7 +80,7 @@ class Field:
             count_tries += 1
 
             if count_tries > self.placing_limit:
-                ships = self.init_2d_arr(self.n)
+                ships = np.zeros([self.n, self.n])
                 count = 0
 
             z = floor(random.random() + 0.5)  # 0 == vertical or 1 == horizontal placement
@@ -116,13 +101,13 @@ class Field:
 
     def generate_ships(self):
         """
-        Place ships on the battlefield. 
-        Ship sizes and numbers of every ship are in static arrais of self 
+        Place ships on the battlefield.
+        Ship sizes and numbers of every ship are in static arrais of self
         """
 
         for s, c in zip(self.ship_sizes, self.ship_count):
             for i in range(0, c):
-                self.place_ship(self.ships, s)
+                self.place_ship(self.field_of_ships, s)
 
     def count_alive_ship_cells(self, ships):
         """
@@ -145,12 +130,12 @@ class Field:
         # print(self.ships)
         x = aim[0]
         y = aim[1]
-        self.damages[x][y] = -1  # player + self.damages_name_offser
+        self.field_of_damages[x][y] = -1  # player + self.damages_name_offser
 
         # The chosen case has already been fired before => xxx shouldn't it know it with the model ?
-        if self.ships[x][y] != 0:
-            self.damages[x][y] = 1
-            self.ships[x][y] = -1
+        if self.field_of_ships[x][y] != 0:
+            self.field_of_damages[x][y] = 1
+            self.field_of_ships[x][y] = -1
             return player  # give next step
 
         return -player  # alternate player
@@ -163,7 +148,7 @@ class Field:
         moves = []
         for y in range(self.n):
             for x in range(self.n):
-                if self.damages[x][y] == 0:
+                if self.field_of_damages[x][y] == 0:
                     moves.append([x, y])
                 else:
                     pass
@@ -176,7 +161,7 @@ class Field:
         """
 
         f = Field(self.n)
-        return [np.array(f.ships), np.array(f.damages)]
+        return [np.array(f.field_of_ships), np.array(f.field_of_damages)]
 
     def get_field_size(self):
         """
@@ -201,12 +186,12 @@ class Field:
             return (ships, damages, -player)
 
         f = Field(self.n)
-        f.ships = np.copy(np.array(ships))
-        f.damages = np.copy(np.array(damages))
+        f.field_of_ships = np.copy(np.array(ships))
+        f.field_of_damages = np.copy(np.array(damages))
         aim = (int(action / self.n), action % self.n)
         player = f.fire(aim, player)
 
-        return (f.ships, f.damages, player)
+        return (f.field_of_ships, f.field_of_damages, player)
 
     def get_valid_moves(self, ships, damages):
         """
@@ -215,8 +200,8 @@ class Field:
 
         v = [0] * self.get_num_actions()
         f = Field(self.n)
-        f.ships = np.copy(np.array(ships))
-        f.damages = np.copy(np.array(damages))
+        f.field_of_ships = np.copy(np.array(ships))
+        f.field_of_damages = np.copy(np.array(damages))
         moves = f.get_allowed_moves()
         if len(moves) == 0:
             v[-1] = 1
@@ -242,7 +227,7 @@ class Field:
 
     def get_visible_area(self, ships, damages):
         """
-        Compute the visible area - missing hits and drown ship cells, 
+        Compute the visible area - missing hits and drown ship cells,
         floating cells are not shown because of the strong foggy cloud :]
         """
 

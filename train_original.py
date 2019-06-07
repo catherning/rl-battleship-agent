@@ -1,14 +1,94 @@
 import os
 import sys
+import time
 from collections import deque
 from pickle import Pickler, Unpickler
 from random import shuffle
 
 import numpy as np
 
-from Battlefield import Battlefield
-from MCTS import MCTS
-from battleship.Field import print_all_battlefield
+from mcts import MCTS
+from battleship import print_all_battlefield, Field
+from nnet import ResidualNNet, CNNet
+
+
+class Battlefield:
+    """
+    Place where two agents are playing N fights to be evaluated
+    """
+
+    def __init__(self, player1, player2, game, display=None):
+        self.player1 = player1
+        self.player2 = player2
+        self.current_player = 1
+        self.game = game
+        self.display = display
+
+    def single_fight(self):
+        """
+        Having two players play one game until it finished print result
+        Used to evaluate performance of trained model against previous version
+        """
+
+        players = [self.player2, None, self.player1]
+        ships, damages = self.game.get_clean_field()
+        it = 0
+        while self.game.check_finish_game(ships, self.current_player) == 0:
+            it += 1
+
+            if self.display:
+                print("Turn ", str(it), "Player ", str(self.current_player))
+                print_all_battlefield(ships, damages)
+
+            action = players[self.current_player + 1](ships, damages)  # lambda x,y
+
+            valids = self.game.get_valid_moves(ships, damages)
+
+            if valids[action] == 0:
+                print('bad state', action)
+                return -self.current_player
+
+            ships, damages, self.current_player = self.game.get_next_state(ships, damages, self.current_player, action)
+
+        if self.display:
+            print("Game over: Turn ", str(it), "Result ", str(self.game.check_finish_game(ships, self.current_player)))
+            # self.display(board)
+        return self.game.check_finish_game(ships, -self.current_player)
+
+    def new_vs_old(self, num):
+        one_won = 0
+        two_won = 0
+        draws = 0
+        for play_num in range(num):
+            begin = time.time()
+            game_result = self.single_fight()
+            if game_result == 1:
+                one_won += 1
+            elif game_result == -1:
+                two_won += 1
+            else:
+                draws += 1
+
+            print('play', play_num, 'winner', game_result, 'time', time.time() - begin)
+
+        return one_won, two_won, draws
+
+    def fight(self, num):
+        """
+        Evaluate new model agains old, playing N games, half of which new is player 1, other half, new is player 2
+        """
+        num = int(num / 2)
+
+        one_won, two_won, draws = self.new_vs_old(num)
+
+        self.player1, self.player2 = self.player2, self.player1
+
+        two_t, one_t, draws_t = self.new_vs_old(num)
+        one_won += one_t
+        two_won += two_t
+        draws += draws_t
+
+        return one_won, two_won, draws
 
 
 class General:
@@ -16,10 +96,10 @@ class General:
     Logic of the agent training, NN will carry out action probabilities and states values
     """
 
-    def __init__(self, game, nnet):
-        self.game = game
+    def __init__(self, field, nnet):
+        self.field = field
         self.nnet = nnet
-        self.pnet = self.nnet.__class__(self.game)
+        self.pnet = self.nnet.__class__(self.field)
         self.history = []
         self.skip_first_play = False
 
@@ -31,7 +111,7 @@ class General:
         self.sims = 15
         self.compare = 40
         self.cpuct = 1  # constant determining the level of exploration
-        self.mcts = MCTS(self.game, self.nnet, self.sims, self.cpuct)
+        self.mcts = MCTS(self.field, self.nnet, self.sims, self.cpuct)
 
         self.checkpoint = './temp/'
         self.load_model = False
@@ -48,7 +128,7 @@ class General:
         """
 
         batch = []
-        ships, damages = self.game.get_clean_field()
+        ships, damages = self.field.get_clean_field()
 
         self.player = 1
         step = 0
@@ -58,22 +138,22 @@ class General:
         while True:
             step += 1
 
-            visible_area = self.game.get_visible_area(ships, damages)
+            visible_area = self.field.get_visible_area(ships, damages)
             temp = int(step < self.thr)
 
             a_prob = self.mcts.get_action_probabilities(ships, damages, t=temp)
-            sym = self.game.get_rotations(visible_area, a_prob)
+            sym = self.field.get_rotations(visible_area, a_prob)
             for a, b in sym:
                 batch.append([a, self.player, b, None])
 
             # Random play ??
             action = np.random.choice(len(a_prob), p=a_prob)
-            ships, damages, player = self.game.get_next_state(ships, damages, self.player, action)
+            ships, damages, player = self.field.get_next_state(ships, damages, self.player, action)
 
             if player == self.player:
                 self.hits[player + 1] += 1
 
-            end = self.game.check_finish_game(ships, self.player)
+            end = self.field.check_finish_game(ships, self.player)
             self.player = player
 
             if end != 0:
@@ -109,7 +189,7 @@ class General:
                 # end = time.time()
 
                 for eps in range(self.epochs):
-                    self.mcts = MCTS(self.game, self.nnet, self.sims, self.cpuct)
+                    self.mcts = MCTS(self.field, self.nnet, self.sims, self.cpuct)
                     iteration_train_examples += self.run_episode()
 
                     # end = time.time()
@@ -130,14 +210,14 @@ class General:
             self.nnet.save_checkpoint(folder=self.checkpoint, filename='temp.pth.tar')
             self.pnet.load_checkpoint(folder=self.checkpoint, filename='temp.pth.tar')
 
-            pmcts = MCTS(self.game, self.pnet, self.sims, self.cpuct)
+            pmcts = MCTS(self.field, self.pnet, self.sims, self.cpuct)
 
             self.nnet.train(trainExamples)
-            nmcts = MCTS(self.game, self.nnet, self.sims, self.cpuct)
+            nmcts = MCTS(self.field, self.nnet, self.sims, self.cpuct)
 
             print('FIGHT AGAINST PREVIOUS VERSION')
             battlefield = Battlefield(lambda x, y: np.argmax(pmcts.get_action_probabilities(x, y, t=0)),
-                                      lambda x, y: np.argmax(nmcts.get_action_probabilities(x, y, t=0)), self.game,
+                                      lambda x, y: np.argmax(nmcts.get_action_probabilities(x, y, t=0)), self.field,
                                       display=False)
             pwins, nwins, draws = battlefield.fight(self.compare)
 
@@ -182,3 +262,32 @@ class General:
 
             # examples based on the model were already collected (loaded)
             self.skip_first_play = True
+
+
+if __name__ == "__main__":
+
+    network = "residual"
+
+    f = Field(6)  # init battlefield
+
+    if network == "residual":
+        nnet = ResidualNNet(f)  # init NN
+    elif network == "cnn":
+        nnet = CNNet(f)
+
+    # define where to store\get checkpoint and model
+    checkpoint = './temp/'
+    load_model = False
+    models_folder = './models/'
+    best_model_file = 'best.pth.tar'
+
+    if load_model:
+        nnet.load_checkpoint(models_folder, best_model_file)
+
+    g = General(f, nnet)  # init play and players
+
+    if load_model:
+        print("Load trainExamples from file")
+        g.load_train_examples()
+
+    g.fight()
