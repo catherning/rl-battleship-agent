@@ -98,7 +98,6 @@ class CNNet(NNet):
         :return: [a_prob, values]
         """
 
-
         x = Reshape((self.w, self.h, 1))(self.input_layer)
 
         a_conv1 = self.cnn_layer(x)

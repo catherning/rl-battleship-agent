@@ -7,8 +7,8 @@ from random import shuffle
 
 import numpy as np
 
-from mcts import MCTS
 from battleship import print_all_battlefield, Field
+from mcts import MCTS
 from nnet import ResidualNNet, CNNet
 
 
@@ -104,7 +104,7 @@ class General:
         self.skip_first_play = False
 
         self.num_iterations = 250
-        self.epochs = 50
+        self.epochs = 5
         self.thr = 15
         self.update_thr = 0.55
         self.len_queue = 200000
@@ -232,6 +232,12 @@ class General:
 
                 # Support stuff
 
+    def getCheckpointFile(self, iteration):
+        '''
+        Load checkpoint
+        '''
+        return 'checkpoint_' + str(iteration) + '.pth.tar'
+
     def save_train_examples(self, iteration):
         """
         Save played games and results to reuse them when training model
@@ -240,7 +246,7 @@ class General:
         folder = self.checkpoint
         if not os.path.exists(folder):
             os.makedirs(folder)
-        filename = os.path.join(folder, 'checkpoint_' + str(iteration) + '.pth.tar' + ".examples")
+        filename = os.path.join(folder, self.getCheckpointFile(iteration) + ".examples")
         with open(filename, "wb+") as f:
             Pickler(f).dump(self.history)
 
@@ -262,7 +268,6 @@ class General:
 
             # examples based on the model were already collected (loaded)
             self.skip_first_play = True
-
 
 if __name__ == "__main__":
 

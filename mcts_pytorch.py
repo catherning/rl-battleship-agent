@@ -1,6 +1,7 @@
 import math
 
 import numpy as np
+import torch
 
 eps = 1e-8
 
@@ -90,7 +91,9 @@ class MCTS:
         if s not in self.Ps:  # or depth_exceeded:
             # leaf node
 
-            self.Ps[s], v = self.nnet.predict(visible_area)
+            self.Ps[s], v = self.nnet(torch.Tensor(visible_area).unsqueeze(0))
+            self.Ps[s] = self.Ps[s][0].detach().numpy()
+            v = v[0][0]
 
             valids = self.game.get_valid_moves(ships, damages)
             self.Ps[s] = self.Ps[s] * valids  # masking invalid moves
