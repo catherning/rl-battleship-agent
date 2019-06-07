@@ -1,6 +1,6 @@
 import time
 
-from battleship.Field import print_all_battlefield
+from Field import print_all_battlefield
 
 
 class Battlefield:

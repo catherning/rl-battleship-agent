@@ -8,7 +8,10 @@ import numpy as np
 
 from Battlefield import Battlefield
 from MCTS import MCTS
-from battleship.Field import print_all_battlefield
+from Field import print_all_battlefield
+
+import torch
+import torch.nn as nn
 
 
 class General:
@@ -20,11 +23,12 @@ class General:
         self.game = game
         self.nnet = nnet
         self.pnet = self.nnet.__class__(self.game)
+        self.optimizer = torch.optim.Adam(self.nnet.parameters())
         self.history = []
         self.skip_first_play = False
 
         self.num_iterations = 250
-        self.epochs = 50
+        self.epochs = 5 #50
         self.thr = 15
         self.update_thr = 0.55
         self.len_queue = 200000
@@ -133,6 +137,9 @@ class General:
             pmcts = MCTS(self.game, self.pnet, self.sims, self.cpuct)
 
             self.nnet.train(trainExamples)
+
+            # self.pytorch_training(trainExamples)
+
             nmcts = MCTS(self.game, self.nnet, self.sims, self.cpuct)
 
             print('FIGHT AGAINST PREVIOUS VERSION')
@@ -152,6 +159,12 @@ class General:
 
                 # Support stuff
 
+    def getCheckpointFile(self, iteration):
+        '''
+        Load checkpoint
+        '''
+        return 'checkpoint_' + str(iteration) + '.pth.tar'
+
     def save_train_examples(self, iteration):
         """
         Save played games and results to reuse them when training model
@@ -160,7 +173,7 @@ class General:
         folder = self.checkpoint
         if not os.path.exists(folder):
             os.makedirs(folder)
-        filename = os.path.join(folder, 'checkpoint_' + str(iteration) + '.pth.tar' + ".examples")
+        filename = os.path.join(folder, self.getCheckpointFile(iteration) + ".examples")
         with open(filename, "wb+") as f:
             Pickler(f).dump(self.history)
 
@@ -182,3 +195,20 @@ class General:
 
             # examples based on the model were already collected (loaded)
             self.skip_first_play = True
+
+    def pytorch_training(self,input_):
+        # TODO
+
+        # self.model = Model(inputs=self.input_layer, outputs=[
+        #     self.a_prob, self.values])
+        # self.model.compile(loss=['categorical_crossentropy',
+        #                          'mean_squared_error'], optimizer=Adam(self.adam_lr))
+
+        model = self.nnet
+        self.optimizer.grad
+        input_fields, target_a_prob, target_values = list(zip(*input_))
+
+        crossentropy_loss = nn.CrossEntropyLoss()
+        mse_loss = nn.MSELoss()
+
+        output = crossentropy_loss(input_fields,)

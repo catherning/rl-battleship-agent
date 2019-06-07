@@ -262,6 +262,7 @@ class Field:
         # print(visible)
         return np.array(visible)
 
+    # xxx: AlphaZero doesn't augment the data with rotations
     def get_rotations(self, arr, a_prob):
         a_prob_arr = np.reshape(a_prob[:-1], (self.n, self.n))
         r = []

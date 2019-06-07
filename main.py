@@ -1,12 +1,12 @@
-from General import General
-from battleship.Field import Field as field
-from battleship.nnet import CNNet, ResidualNNet
+from train_pytorch import General
+from Field import Field
+from nnet import CNNet, ResidualNNet
 
 if __name__ == "__main__":
 
     network = "residual"
 
-    f = field(6)  # init battlefield
+    f = Field(6)  # init battlefield
 
     if network == "residual":
         nnet = ResidualNNet(f)  # init NN
