@@ -10,7 +10,6 @@ sys.path.append('..')
 
 
 class NNet:
-
     def __init__(self, game):
         self.w, self.h = game.get_field_size()
         self.action_size = game.get_num_actions()  # all
