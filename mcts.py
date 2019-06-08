@@ -2,6 +2,8 @@ import math
 
 import numpy as np
 
+from battleship import Field
+
 eps = 1e-8
 
 
@@ -12,8 +14,8 @@ class MCTS():
     '''
 
     # https://deepmind.com/documents/119/agz_unformatted_nature.pdf
-    def __init__(self, game, nnet, sims, cpuct):
-        self.game = game
+    def __init__(self, field: Field, nnet, sims, cpuct):
+        self.field = field
         self.nnet = nnet
         self.sims = sims
         self.cpuct = cpuct  # constant determining the level of exploration
@@ -36,10 +38,10 @@ class MCTS():
         for i in range(self.sims):
             self.search(ships, damages)  # , 0, 500)
 
-        visible_area = self.game.get_visible_area(ships, damages)
+        visible_area = self.field.get_visible_area(ships, damages)
         counts = []
         s = np.array(visible_area).tostring()
-        for a in range(self.game.get_num_actions()):
+        for a in range(self.field.get_num_actions()):
             visit_count = 0
             if (s, a) in self.Nsa:
                 visit_count = self.Nsa[(s, a)]
@@ -76,12 +78,12 @@ class MCTS():
             v: the negative of the value of the current canonicalBoard
         """
 
-        visible_area = self.game.get_visible_area(ships, damages)
+        visible_area = self.field.get_visible_area(ships, damages)
         # print(visible_area)
         s = np.array(visible_area).tostring()
 
         if s not in self.Es:
-            self.Es[s] = self.game.check_finish_game(ships, 1)
+            self.Es[s] = self.field.check_finish_game(ships, 1)
         if self.Es[s] != 0:
             # terminal node
             return -self.Es[s]
@@ -90,7 +92,7 @@ class MCTS():
         if s not in self.Ps:  # or depth_exceeded:
             # leaf node
             self.Ps[s], v = self.nnet.predict(visible_area)
-            valids = self.game.get_valid_moves(ships, damages)
+            valids = self.field.get_valid_moves(ships, damages)
             self.Ps[s] = self.Ps[s] * valids  # masking invalid moves
             sum_Ps_s = np.sum(self.Ps[s])
             if sum_Ps_s > 0:
@@ -112,7 +114,7 @@ class MCTS():
         cur_best = -float('inf')
         best_act = -1
 
-        for a in range(self.game.get_num_actions()):
+        for a in range(self.field.get_num_actions()):
             if valids[a]:
                 if (s, a) in self.Qsa:
                     u = self.Qsa[(s, a)] + self.cpuct * self.Ps[s][a] * math.sqrt(self.Ns[s]) / (1 + self.Nsa[(s, a)])
@@ -124,7 +126,7 @@ class MCTS():
                     best_act = a
 
         a = best_act
-        next_s, next_d, next_player = self.game.get_next_state(ships, damages, 1, a)
+        next_s, next_d, next_player = self.field.get_next_state(ships, damages, 1, a)
 
         v = self.search(next_s, next_d)
 
