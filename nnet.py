@@ -98,8 +98,6 @@ class CNNet(NNet):
         :return: [a_prob, values]
         """
 
-        # x= torch.unsqueeze(self.input_layer,1)
-
         x = Reshape((self.w, self.h, 1))(self.input_layer)
 
         a_conv1 = self.cnn_layer(x)
@@ -109,8 +107,9 @@ class CNNet(NNet):
 
         a_conv4_flat = Flatten()(a_conv4)
 
-        dense_1 = Dropout(self.dropout)(Activation('relu')(
-            BatchNormalization(axis=1)(Dense(1024)(a_conv4_flat))))
+        temp1 = Dense(1024)(a_conv4_flat)
+        temp2 = BatchNormalization(axis=1)(temp1)
+        dense_1 = Dropout(self.dropout)(Activation('relu')( temp2 ))
         dense_2 = Dropout(self.dropout)(Activation('relu')(
             BatchNormalization(axis=1)(Dense(512)(dense_1))))
 
@@ -197,7 +196,7 @@ class ResidualNNet(NNet):
         1. A convolution of 2 filters of kernel size 1 × 1 with stride 1
         2. Batch normalisation
         3. A rectifier non-linearity
-        4. A fully connected linear layer that outputs a vector of size 192 + 1 = 362 corresponding to
+        4. A fully connected linear layer that outputs a vector of size 19**2 + 1 = 362 corresponding to
            logit probabilities for all intersections and the pass move
         """
 

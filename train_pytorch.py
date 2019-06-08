@@ -6,10 +6,13 @@ from pickle import Pickler, Unpickler
 from random import shuffle
 
 import numpy as np
+import torch
+import torch.nn as nn
+from torch.utils.data import Dataset, DataLoader
 
 from battleship import print_all_battlefield, Field
-from mcts import MCTS
-from nnet import ResidualNNet, CNNet
+from mcts_pytorch import MCTS
+from nnet_pytorch import ResidualNNet, CNNet
 
 
 class Battlefield:
@@ -96,27 +99,33 @@ class General:
     Logic of the agent training, NN will carry out action probabilities and states values
     """
 
-    def __init__(self, field, nnet):
+    def __init__(self, field, nnet, learning_rate=1e-3):
         self.field = field
         self.nnet = nnet
         self.pnet = self.nnet.__class__(self.field)
+
+        # Training => from nnet class
+        self.epochs = 10
+        self.batch_size = 64
+
+        self.optimizer = torch.optim.Adam(self.nnet.parameters(), lr=learning_rate)
         self.history = []
         self.skip_first_play = False
 
-        self.num_iterations = 250
-        self.epochs = 5
+        self.num_iterations = 5 # 250
+        self.nb_train_examples = 10
         self.thr = 15
         self.update_thr = 0.55
-        self.len_queue = 200000
+        self.len_queue = 200 # 000
         self.sims = 15
-        self.compare = 40
+        self.compare = 20
         self.cpuct = 1  # constant determining the level of exploration
         self.mcts = MCTS(self.field, self.nnet, self.sims, self.cpuct)
 
         self.checkpoint = './temp/'
         self.load_model = False
         self.models_folder = './models/'
-        self.best_model_file = 'best.pth.tar'
+        self.best_model_file = 'best.pth'
         self.len_history = 40
         self.last_steps = []
         self.display = False
@@ -184,35 +193,34 @@ class General:
         for i in range(1, self.num_iterations + 1):
             print('iteration: ', str(i))
 
+            # TODO should be able to simplify the next 10 lines: why iteration_train_examples, history and train_examples ?
             if not self.skip_first_play or i > 1:
                 iteration_train_examples = deque([], maxlen=self.len_queue)
-                # end = time.time()
 
-                for eps in range(self.epochs):
-                    self.mcts = MCTS(self.field, self.nnet, self.sims, self.cpuct)
+                for eps in range(self.nb_train_examples):
+                    self.mcts = MCTS(self.field, self.nnet, self.sims, self.cpuct)  # XXX necessary to initialize it each time ?
                     iteration_train_examples += self.run_episode()
-
-                    # end = time.time()
 
                 self.history.append(iteration_train_examples)
 
             if len(self.history) > self.len_history:
-                print("len(history) =", len(self.history), " => remove the oldest trainExamples")
+                print("len(history) =", len(self.history), " => remove the oldest train_examples")
                 self.history.pop(0)
 
             self.save_train_examples(i - 1)
 
-            trainExamples = []
+            train_examples = []
             for e in self.history:
-                trainExamples.extend(e)
-            shuffle(trainExamples)
+                train_examples.extend(e)
+            shuffle(train_examples)
 
-            self.nnet.save_checkpoint(folder=self.checkpoint, filename='temp.pth.tar')
-            self.pnet.load_checkpoint(folder=self.checkpoint, filename='temp.pth.tar')
+            self.nnet.save_checkpoint(self.optimizer, folder=self.checkpoint, filename='temp.pth')
+            _ = self.pnet.load_checkpoint(folder=self.checkpoint, filename='temp.pth')
 
             pmcts = MCTS(self.field, self.pnet, self.sims, self.cpuct)
 
-            self.nnet.train(trainExamples)
+            self.pytorch_train(train_examples)
+
             nmcts = MCTS(self.field, self.nnet, self.sims, self.cpuct)
 
             print('FIGHT AGAINST PREVIOUS VERSION')
@@ -224,19 +232,20 @@ class General:
             print('NEW/PREV WINS : %d / %d ; DRAWS : %d' % (nwins, pwins, draws))
             if pwins + nwins > 0 and float(nwins) / (pwins + nwins) < self.update_thr:
                 print('REJECTING NEW MODEL')
-                self.nnet.load_checkpoint(folder=self.checkpoint, filename='temp.pth.tar')
+                optimizer_dict = self.nnet.load_checkpoint(folder=self.checkpoint, filename='temp.pth')
+                self.optimizer.load_state_dict(optimizer_dict)
             else:
                 print('ACCEPTING NEW MODEL')
-                self.nnet.save_checkpoint(folder=self.checkpoint, filename=self.getCheckpointFile(i))
-                self.nnet.save_checkpoint(folder=self.checkpoint, filename='best.pth.tar')
+                self.nnet.save_checkpoint(self.optimizer, folder=self.checkpoint, filename=self.get_checkpoint_file(i))
+                self.nnet.save_checkpoint(self.optimizer, folder=self.checkpoint, filename='best.pth')
 
                 # Support stuff
 
-    def getCheckpointFile(self, iteration):
+    def get_checkpoint_file(self, iteration):
         '''
         Load checkpoint
         '''
-        return 'checkpoint_' + str(iteration) + '.pth.tar'
+        return 'checkpoint_' + str(iteration) + '.pth'
 
     def save_train_examples(self, iteration):
         """
@@ -246,7 +255,7 @@ class General:
         folder = self.checkpoint
         if not os.path.exists(folder):
             os.makedirs(folder)
-        filename = os.path.join(folder, self.getCheckpointFile(iteration) + ".examples")
+        filename = os.path.join(folder, self.get_checkpoint_file(iteration) + ".examples")
         with open(filename, "wb+") as f:
             Pickler(f).dump(self.history)
 
@@ -263,15 +272,38 @@ class General:
                 sys.exit()
         else:
             print("File with trainExamples found. Read it.")
-            with open(examples_file, "rb") as f:
-                self.history = Unpickler(f).load()
+            with open(examples_file, "rb") as file:
+                self.history = Unpickler(file).load()
 
             # examples based on the model were already collected (loaded)
             self.skip_first_play = True
 
+    def pytorch_train(self, input_):
+        # TODO
+
+        for epoch in range(self.epochs):
+            self.optimizer.zero_grad()
+            input_fields, target_a_prob, target_values = list(zip(*input_))
+            target_a_prob = torch.LongTensor(target_a_prob)
+            target_a = torch.max(target_a_prob, 1)[1]
+
+            predicted_a_prob, predicted_values = self.nnet(torch.Tensor(input_fields))
+            log_predicted_a_prob = torch.log(predicted_a_prob)
+
+            nllloss = nn.NLLLoss()
+            mse_loss = nn.MSELoss()
+
+            loss = mse_loss(predicted_values, torch.Tensor(target_values))
+            loss += nllloss(log_predicted_a_prob, target_a)
+            loss.backward()
+            self.optimizer.step()
+
+            print(f"Epoch {epoch}/{self.epochs} - Training loss: {loss}")
+
+
 if __name__ == "__main__":
 
-    network = "residual"
+    network = "cnn"
 
     f = Field(6)  # init battlefield
 
@@ -284,7 +316,7 @@ if __name__ == "__main__":
     checkpoint = './temp/'
     load_model = False
     models_folder = './models/'
-    best_model_file = 'best.pth.tar'
+    best_model_file = 'best.pth'
 
     if load_model:
         nnet.load_checkpoint(models_folder, best_model_file)
