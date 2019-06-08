@@ -91,20 +91,23 @@ class CNNet(NNet):
         super().__init__(game)
 
         self.dropout = 0.3
-        self.dense_in_dim = 1024
-        self.dense_out_dim = 512
+        self.cnn_out_dim = 1024
+        self.dense_in_dim = 512 #1024
+        self.dense_out_dim = 256 #512
 
         # Model
-        self.conv_1 = create_cnn_layer_seq(1, self.num_filters,
-                                           self.filter_size)  # fixme : might be 1, numfilters, filtersize
+        self.conv_1 = create_cnn_layer_seq(1, self.num_filters, self.filter_size)
         self.conv_2 = create_cnn_layer_seq(self.num_filters, self.num_filters, self.filter_size)
         self.conv_3 = create_cnn_layer_seq(self.num_filters, self.num_filters, self.filter_size)
         self.conv_4 = create_cnn_layer_seq(self.num_filters, self.num_filters, self.filter_size)
 
-        self.dense_l1 = create_dense_layer(self.dense_in_dim, self.dense_in_dim, self.dropout)
+        # 1024 is original in_dim
+        self.dense_l1 = create_dense_layer(self.cnn_out_dim, self.dense_in_dim, self.dropout)
         self.dense_l2 = create_dense_layer(self.dense_in_dim, self.dense_out_dim, self.dropout)
         self.probabilities = nn.Sequential(nn.Linear(self.dense_out_dim, self.action_size), nn.Softmax())
         self.values = nn.Sequential(nn.Linear(self.dense_out_dim, 1), nn.Tanh())
+
+        print(self)
 
     def forward(self, input_):
         """
@@ -119,22 +122,22 @@ class CNNet(NNet):
             x = torch.cat([x, x])
 
         # Same padding
-        padded_x = pad_2d(x, "same", self.filter_size, self.filter_size)
-        a_conv1 = self.conv_1(padded_x)
-        padded_conv_1 = pad_2d(a_conv1, "same", self.filter_size, self.filter_size)
-        a_conv2 = self.conv_2(padded_conv_1)
+        x = pad_2d(x, "same", self.filter_size, self.filter_size)
+        a_conv = self.conv_1(x)
+        a_conv = pad_2d(a_conv, "same", self.filter_size, self.filter_size)
+        a_conv = self.conv_2(a_conv)
 
         # Valid padding
-        a_conv3 = self.conv_3(a_conv2)
-        a_conv4 = self.conv_4(a_conv3)
+        a_conv = self.conv_3(a_conv)
+        a_conv = self.conv_4(a_conv)
 
-        a_conv4_flat = a_conv4.view(a_conv4.shape[0], -1)
+        a_conv = a_conv.view(a_conv.shape[0], -1)
 
-        dense_1 = self.dense_l1(a_conv4_flat)
-        dense_2 = self.dense_l2(dense_1)
+        dense = self.dense_l1(a_conv)
+        dense = self.dense_l2(dense)
 
-        a_prob = self.probabilities(dense_2)
-        values = self.values(dense_2)
+        a_prob = self.probabilities(dense)
+        values = self.values(dense)
 
         return a_prob, values
 
@@ -183,7 +186,7 @@ class ResidualNNet(NNet):
         super().__init__(game)
 
         self.num_residual = 3  # 19 #39 # only residual
-        self.value_head_dense = 256  # only residual
+        self.value_head_dense = 128 # 256  # only residual
         self.game_size = game.get_field_size()[0]
 
         # Model
@@ -201,6 +204,8 @@ class ResidualNNet(NNet):
 
         self.policy_out_layer = nn.Sequential(nn.Linear(self.game_size ** 2, self.action_size),
                                               nn.Softmax())
+
+        print(self)
 
     def convolutional_block(self, input_):
         """
