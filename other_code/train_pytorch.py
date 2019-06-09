@@ -8,11 +8,10 @@ from random import shuffle
 import numpy as np
 import torch
 import torch.nn as nn
-from torch.utils.data import Dataset, DataLoader
 
 from battleship import print_all_battlefield, Field
-from mcts_pytorch import MCTS
-from nnet_pytorch import ResidualNNet, CNNet
+from other_code.mcts_pytorch import MCTS
+from other_code.nnet_pytorch import ResidualNNet, CNNet
 
 
 class Battlefield:
@@ -105,7 +104,7 @@ class General:
         self.pnet = self.nnet.__class__(self.field)
 
         # Training => from nnet class
-        self.epochs = 10
+        self.epochs = 20
         self.batch_size = 64
 
         self.optimizer = torch.optim.Adam(self.nnet.parameters(), lr=learning_rate)
@@ -234,6 +233,8 @@ class General:
                 print('REJECTING NEW MODEL')
                 optimizer_dict = self.nnet.load_checkpoint(folder=self.checkpoint, filename='temp.pth')
                 self.optimizer.load_state_dict(optimizer_dict)
+                #TODO maybe just keep previous opt ?
+
             else:
                 print('ACCEPTING NEW MODEL')
                 self.nnet.save_checkpoint(self.optimizer, folder=self.checkpoint, filename=self.get_checkpoint_file(i))
@@ -303,7 +304,7 @@ class General:
 
 if __name__ == "__main__":
 
-    network = "cnn"
+    network = "residual"
 
     f = Field(6)  # init battlefield
 
