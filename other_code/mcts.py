@@ -2,7 +2,7 @@ import math
 
 import numpy as np
 
-from battleship import Field
+from battlefield import Field
 
 eps = 1e-8
 

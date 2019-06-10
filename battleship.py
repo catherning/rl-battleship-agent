@@ -24,7 +24,7 @@ class Player(object):
 
 class RandomAgent(Player):
     def choose_firing_target(self, opponent_field_state_matrix):
-        possible_firing_targets = list(zip(*np.where(opponent_field_state_matrix == CellState.UNTOUCHED)))
+        possible_firing_targets = np.argwhere(opponent_field_state_matrix == CellState.UNTOUCHED)
         # todo: change to argwhere
         target_y, target_x = random.choice(possible_firing_targets)
         return target_y, target_x

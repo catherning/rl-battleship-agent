@@ -9,7 +9,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 
-from battleship import print_all_battlefield, Field
+from battlefield import print_all_battlefield, Field
 from other_code.mcts_pytorch import MCTS
 from other_code.nnet_pytorch import ResidualNNet, CNNet
 
@@ -304,7 +304,7 @@ class General:
 
 if __name__ == "__main__":
 
-    network = "residual"
+    network = "cnn"
 
     f = Field(6)  # init battlefield
 

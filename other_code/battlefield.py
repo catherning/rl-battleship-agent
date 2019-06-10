@@ -1,3 +1,7 @@
+import random
+from math import ceil, floor
+
+import numpy as np
 
 class Field:
     """

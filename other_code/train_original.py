@@ -7,7 +7,7 @@ from random import shuffle
 
 import numpy as np
 
-from battleship import print_all_battlefield, Field
+from battlefield import print_all_battlefield, Field
 from mcts import MCTS
 from nnet import ResidualNNet, CNNet
 
