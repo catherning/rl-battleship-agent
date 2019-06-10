@@ -156,7 +156,7 @@ class General:
 
             # Random play ??
             action = np.random.choice(len(a_prob), p=a_prob)
-            ships, damages, player = self.field.get_next_state(ships, damages, self.player, action)
+            damages, player = self.field.get_next_state(ships, damages, self.player, action)
 
             if player == self.player:
                 self.hits[player + 1] += 1

@@ -7,9 +7,9 @@ from random import shuffle
 
 import numpy as np
 
-from battlefield import print_all_battlefield, Field
+from other_code.battlefield import print_all_battlefield, Field
 from mcts import MCTS
-from nnet import ResidualNNet, CNNet
+from other_code.nnet import ResidualNNet, CNNet
 
 
 class Battlefield:
@@ -173,6 +173,7 @@ class General:
                 if self.display:
                     print_all_battlefield(ships, damages)
 
+                # input_fields, target_a_prob, target_values
                 res = [(x[0], x[2], winner * ((-1) ** (x[1] != self.player))) for x in batch]
                 return res
 
@@ -184,35 +185,35 @@ class General:
         for i in range(1, self.num_iterations + 1):
             print('iteration: ', str(i))
 
-            # if not self.skip_first_play or i > 1:
-            #     iteration_train_examples = deque([], maxlen=self.len_queue)
-            #     # end = time.time()
-            #
-            #     for eps in range(self.epochs):
-            #         self.mcts = MCTS(self.field, self.nnet, self.sims, self.cpuct)
-            #         iteration_train_examples += self.run_episode()
-            #
-            #         # end = time.time()
-            #
-            #     self.history.append(iteration_train_examples)
-            #
-            # if len(self.history) > self.len_history:
-            #     print("len(history) =", len(self.history), " => remove the oldest trainExamples")
-            #     self.history.pop(0)
-            #
-            # self.save_train_examples(i - 1)
-            #
-            # trainExamples = []
-            # for e in self.history:
-            #     trainExamples.extend(e)
-            # shuffle(trainExamples)
-            #
-            # self.nnet.save_checkpoint(folder=self.checkpoint, filename='temp.pth.tar')
-            # self.pnet.load_checkpoint(folder=self.checkpoint, filename='temp.pth.tar')
+            if not self.skip_first_play or i > 1:
+                iteration_train_examples = deque([], maxlen=self.len_queue)
+                # end = time.time()
+
+                for eps in range(self.epochs):
+                    self.mcts = MCTS(self.field, self.nnet, self.sims, self.cpuct)
+                    iteration_train_examples += self.run_episode()
+
+                    # end = time.time()
+
+                self.history.append(iteration_train_examples)
+
+            if len(self.history) > self.len_history:
+                print("len(history) =", len(self.history), " => remove the oldest trainExamples")
+                self.history.pop(0)
+
+            self.save_train_examples(i - 1)
+
+            trainExamples = []
+            for e in self.history:
+                trainExamples.extend(e)
+            shuffle(trainExamples)
+
+            self.nnet.save_checkpoint(folder=self.checkpoint, filename='temp.pth.tar')
+            self.pnet.load_checkpoint(folder=self.checkpoint, filename='temp.pth.tar')
 
             pmcts = MCTS(self.field, self.pnet, self.sims, self.cpuct)
 
-            # self.nnet.train(trainExamples)
+            self.nnet.train(trainExamples)
             nmcts = MCTS(self.field, self.nnet, self.sims, self.cpuct)
 
             print('FIGHT AGAINST PREVIOUS VERSION')

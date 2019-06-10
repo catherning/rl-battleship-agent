@@ -2,13 +2,9 @@ import random
 import re
 from copy import deepcopy
 from enum import Enum
-from math import ceil, floor
-from typing import Iterable, List
+from typing import List
 
 import numpy as np
-
-from ai_agent import *
-from nnet import CNNet, ResidualNNet
 
 
 class Player(object):
@@ -28,9 +24,8 @@ class Player(object):
 class RandomAgent(Player):
     def choose_firing_target(self, opponent_field_state_matrix):
         possible_firing_targets = np.argwhere(opponent_field_state_matrix == CellState.UNTOUCHED)
-        # todo: change to argwhere
         target_y, target_x = random.choice(possible_firing_targets)
-        return target_y, target_x
+        return target_y, target_x, None
 
 
 class HumanPlayer(Player):
@@ -46,7 +41,7 @@ class HumanPlayer(Player):
                 return input_a_target()
             return y, x
 
-        return input_a_target()
+        return input_a_target(), None
 
 
 class Orientation(Enum):
@@ -272,18 +267,29 @@ class Game(object):
         finished = False
         winner = None
 
+        history_a_prob = []
+        history_states = []
+        history_success = []
+
         while not finished:
             if type(self._active_player) is HumanPlayer:
                 print(self.field_state_per_player[self._active_player])
 
             opponent_field = self.field_state_per_player[self.non_active_player]
-            # xxx Might need other inputs if agent is AI
-            firing_target_y, firing_target_x = self._active_player.choose_firing_target(
+
+            # xxx needs to return a_prob for AI agent
+            firing_target_y, firing_target_x, a_prob = self._active_player.choose_firing_target(
                 opponent_field_state_matrix=opponent_field.state_matrix
             )
             succeeded = opponent_field.fire_at_target(y=firing_target_y, x=firing_target_x)
             # todo: if it's an RL agent, return the reward
             # self._active_player.give_reward(succeeded)
+
+            # xxx saving all data of AI playing, not other player
+            if a_prob is not None:
+                history_states.append(np.copy(opponent_field.state_matrix))
+                history_success.append(succeeded) # convert to 1 and 0 ?
+                history_a_prob.append(a_prob)
 
             if opponent_field.is_alive:
                 self.switch_active_player()
@@ -291,22 +297,15 @@ class Game(object):
                 finished = True
                 winner = self._active_player
 
-        return GameResult(winner=winner)
+        return GameResult(winner=winner), history_states, history_a_prob, history_success
 
 
 if __name__ == '__main__':
-
     FIELD_SIZE = 10
 
-    network = "cnn"
-
-    if network == "residual":
-        nnet = ResidualNNet(FIELD_SIZE)  # init NN
-    elif network == "cnn":
-        nnet = CNNet(FIELD_SIZE)
-
-    g = Game(player_1=AIAgent(nnet), player_2=RandomAgent(), field_size=FIELD_SIZE, ship_sizes=[4, 3, 2], ship_counts=[1, 2, 3])
-    result = g.play_out()
+    g = Game(player_1=HumanPlayer(), player_2=RandomAgent(), field_size=FIELD_SIZE, ship_sizes=[4, 3, 2],
+             ship_counts=[1, 2, 3])
+    result,_,_ = g.play_out()
     print(g.field_state_per_player[result.winner])
     print()
     print(g.field_state_per_player[g.get_opponent(result.winner)])

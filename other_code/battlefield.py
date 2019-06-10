@@ -81,7 +81,7 @@ class Field:
             if count_tries > self.placing_limit:
                 ships = np.zeros([self.n, self.n])
                 count_tries = 0
-                print("Clear ship field!")
+                # print("Clear ship field!")
                 # xxx wtf removes all the ships, put before, could instead try generate ships again
 
             z = floor(random.random() + 0.5)  # 0 == vertical or 1 == horizontal placement
@@ -109,7 +109,7 @@ class Field:
         for s, c in zip(self.ship_sizes, self.ship_count):
             for i in range(0, c):
                 self.place_ship(self.field_of_ships, s)
-                print(f"Ship {i} of size {s} done.")
+                # print(f"Ship {i} of size {s} done.")
 
     def count_alive_ship_cells(self, ships):
         """

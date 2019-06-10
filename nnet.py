@@ -19,7 +19,7 @@ class NNet:
         self.filter_size = 3
 
         # Training
-        self.epochs = 10
+        self.epochs = 1 #10
         self.batch_size = 64
         self.adam_lr = 1e-3
 
@@ -39,14 +39,18 @@ class NNet:
         a_conv1 = Activation('relu')(bnorm_1)
         return a_conv1
 
-    def train(self, examples):
+    def train(self, input_fields, target_a_prob, target_values):
         """
         Train the network with provided data
         """
-        input_fields, target_a_prob, target_values = list(zip(*examples))
+        # input_fields, target_a_prob, target_values = list(zip(*examples))
+
+        # Redundant ?
         input_fields = np.asarray(input_fields)
         target_a_prob = np.asarray(target_a_prob)
+
         target_values = np.asarray(target_values)
+
         self.model.fit(x=input_fields, y=[
             target_a_prob, target_values], batch_size=self.batch_size, epochs=self.epochs)
 
