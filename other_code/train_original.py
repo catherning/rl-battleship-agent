@@ -48,7 +48,7 @@ class Battlefield:
                 print('bad state', action)
                 return -self.current_player
 
-            ships, damages, self.current_player = self.game.get_next_state(ships, damages, self.current_player, action)
+            damages, self.current_player = self.game.get_next_state(ships, damages, self.current_player, action)
 
         if self.display:
             print("Game over: Turn ", str(it), "Result ", str(self.game.check_finish_game(ships, self.current_player)))
@@ -126,6 +126,7 @@ class General:
         Training episode - a single game of two agents that are trying to get as much hits as possible
         having missing hits(water) and drown ship cells
         """
+        # XXX WTF so the two players play on the same field... WTF
 
         batch = []
         ships, damages = self.field.get_clean_field()
@@ -146,9 +147,8 @@ class General:
             for a, b in sym:
                 batch.append([a, self.player, b, None])
 
-            # Random play ??
             action = np.random.choice(len(a_prob), p=a_prob)
-            ships, damages, player = self.field.get_next_state(ships, damages, self.player, action)
+            damages, player = self.field.get_next_state(ships, damages, self.player, action)
 
             if player == self.player:
                 self.hits[player + 1] += 1
@@ -184,35 +184,35 @@ class General:
         for i in range(1, self.num_iterations + 1):
             print('iteration: ', str(i))
 
-            if not self.skip_first_play or i > 1:
-                iteration_train_examples = deque([], maxlen=self.len_queue)
-                # end = time.time()
-
-                for eps in range(self.epochs):
-                    self.mcts = MCTS(self.field, self.nnet, self.sims, self.cpuct)
-                    iteration_train_examples += self.run_episode()
-
-                    # end = time.time()
-
-                self.history.append(iteration_train_examples)
-
-            if len(self.history) > self.len_history:
-                print("len(history) =", len(self.history), " => remove the oldest trainExamples")
-                self.history.pop(0)
-
-            self.save_train_examples(i - 1)
-
-            trainExamples = []
-            for e in self.history:
-                trainExamples.extend(e)
-            shuffle(trainExamples)
-
-            self.nnet.save_checkpoint(folder=self.checkpoint, filename='temp.pth.tar')
-            self.pnet.load_checkpoint(folder=self.checkpoint, filename='temp.pth.tar')
+            # if not self.skip_first_play or i > 1:
+            #     iteration_train_examples = deque([], maxlen=self.len_queue)
+            #     # end = time.time()
+            #
+            #     for eps in range(self.epochs):
+            #         self.mcts = MCTS(self.field, self.nnet, self.sims, self.cpuct)
+            #         iteration_train_examples += self.run_episode()
+            #
+            #         # end = time.time()
+            #
+            #     self.history.append(iteration_train_examples)
+            #
+            # if len(self.history) > self.len_history:
+            #     print("len(history) =", len(self.history), " => remove the oldest trainExamples")
+            #     self.history.pop(0)
+            #
+            # self.save_train_examples(i - 1)
+            #
+            # trainExamples = []
+            # for e in self.history:
+            #     trainExamples.extend(e)
+            # shuffle(trainExamples)
+            #
+            # self.nnet.save_checkpoint(folder=self.checkpoint, filename='temp.pth.tar')
+            # self.pnet.load_checkpoint(folder=self.checkpoint, filename='temp.pth.tar')
 
             pmcts = MCTS(self.field, self.pnet, self.sims, self.cpuct)
 
-            self.nnet.train(trainExamples)
+            # self.nnet.train(trainExamples)
             nmcts = MCTS(self.field, self.nnet, self.sims, self.cpuct)
 
             print('FIGHT AGAINST PREVIOUS VERSION')

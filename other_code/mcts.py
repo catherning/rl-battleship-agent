@@ -20,11 +20,11 @@ class MCTS:
         self.sims = sims
         self.cpuct = cpuct  # constant determining the level of exploration
         self.Qsa = {}  # stores Q values for s,a (as defined in the paper)
-        self.Nsa = {}  # stores #times edge s,a was visited
-        self.Ns = {}  # stores #times board s was visited
-        self.Ps = {}  # stores initial policy (returned by neural net)
-        self.Es = {}  # stores game.getGameEnded ended for board s
-        self.Vs = {}  # stores game.getValidMoves for board s
+        self.times_s_a_visited = {}  # stores #times edge s,a was visited
+        self.times_s_visited = {}  # stores #times board s was visited
+        self.init_policy = {}  # stores initial policy (returned by neural net)
+        self.game_ended_s = {}  # stores game.getGameEnded ended for board s
+        self.validmoves_s = {}  # stores game.getValidMoves for board s
 
     def get_action_probabilities(self, ships, damages, t=1):
         """
@@ -33,8 +33,15 @@ class MCTS:
 
         Returns:
             probs: a policy vector where the probability of the ith action is
-                   proportional to Nsa[(s,a)]**(1./temp)
+                   proportional to times_s_a_visited[(s,a)]**(1./temp)
         """
+
+        # Damages is own state_matrix: the progress we are at
+        # ships is other player's ship_matrix
+
+        # Create our supposition of where the ships are, according to the hit cells
+
+
         for i in range(self.sims):
             self.search(ships, damages)  # , 0, 500)
 
@@ -43,8 +50,8 @@ class MCTS:
         s = np.array(visible_area).tostring()
         for a in range(self.field.get_num_actions()):
             visit_count = 0
-            if (s, a) in self.Nsa:
-                visit_count = self.Nsa[(s, a)]
+            if (s, a) in self.times_s_a_visited:
+                visit_count = self.times_s_a_visited[(s, a)]
 
             counts.append(visit_count)
 
@@ -67,7 +74,7 @@ class MCTS:
         Once a leaf node is found, the neural network is called to return an
         initial policy P and a value v for the state. This value is propogated
         up the search path. In case the leaf node is a terminal state, the
-        outcome is propogated up the search path. The values of Ns, Nsa, Qsa are
+        outcome is propogated up the search path. The values of times_s_visited, times_s_a_visited, Qsa are
         updated.
 
         NOTE: the return values are the negative of the value of the current
@@ -82,62 +89,62 @@ class MCTS:
         # print(visible_area)
         s = np.array(visible_area).tostring()
 
-        if s not in self.Es:
-            self.Es[s] = self.field.check_finish_game(ships, 1)
-        if self.Es[s] != 0:
+        if s not in self.game_ended_s:
+            self.game_ended_s[s] = self.field.check_finish_game(ships, 1)
+        if self.game_ended_s[s] != 0:
             # terminal node
-            return -self.Es[s]
+            return -self.game_ended_s[s]
 
         # depth_exceeded = depth_limit is not None and depth > depth_limit
-        if s not in self.Ps:  # or depth_exceeded:
+        if s not in self.init_policy:  # or depth_exceeded:
             # leaf node
 
-            self.Ps[s], v = self.nnet.predict(visible_area)
+            self.init_policy[s], v = self.nnet.predict(visible_area)
             valids = self.field.get_valid_moves(ships, damages)
-            self.Ps[s] = self.Ps[s] * valids  # masking invalid moves
-            sum_Ps_s = np.sum(self.Ps[s])
+            self.init_policy[s] = self.init_policy[s] * valids  # masking invalid moves
+            sum_Ps_s = np.sum(self.init_policy[s])
             if sum_Ps_s > 0:
-                self.Ps[s] /= sum_Ps_s
+                self.init_policy[s] /= sum_Ps_s
             else:
                 # if all valid moves were masked make all valid moves equally probable
 
                 # NB! All valid moves may be masked if either your NNet architecture is insufficient or you've get overfitting or something else.
                 # If you have got dozens or hundreds of these messages you should pay attention to your NNet and/or training process.   
                 print("All valid moves were masked, do workaround.")
-                self.Ps[s] = self.Ps[s] + valids
-                self.Ps[s] /= np.sum(self.Ps[s])
+                self.init_policy[s] = self.init_policy[s] + valids
+                self.init_policy[s] /= np.sum(self.init_policy[s])
 
-            self.Vs[s] = valids
-            self.Ns[s] = 0
+            self.validmoves_s[s] = valids
+            self.times_s_visited[s] = 0
             return -v
 
-        valids = self.Vs[s]
+        valids = self.validmoves_s[s]
         cur_best = -float('inf')
         best_act = -1
 
         for a in range(self.field.get_num_actions()):
             if valids[a]:
                 if (s, a) in self.Qsa:
-                    u = self.Qsa[(s, a)] + self.cpuct * self.Ps[s][a] * math.sqrt(self.Ns[s]) / (1 + self.Nsa[(s, a)])
+                    u = self.Qsa[(s, a)] + self.cpuct * self.init_policy[s][a] * math.sqrt(self.times_s_visited[s]) / (1 + self.times_s_a_visited[(s, a)])
                 else:
-                    u = self.cpuct * self.Ps[s][a] * math.sqrt(self.Ns[s] + eps)
+                    u = self.cpuct * self.init_policy[s][a] * math.sqrt(self.times_s_visited[s] + eps)
 
                 if u > cur_best:
                     cur_best = u
                     best_act = a
 
         a = best_act
-        next_s, next_d, next_player = self.field.get_next_state(ships, damages, 1, a)
+        next_d, next_player = self.field.get_next_state(ships, damages, 1, a)
 
-        v = self.search(next_s, next_d)
+        v = self.search(ships, next_d)
 
         if (s, a) in self.Qsa:
-            self.Qsa[(s, a)] = (self.Nsa[(s, a)] * self.Qsa[(s, a)] + v) / (self.Nsa[(s, a)] + 1)
-            self.Nsa[(s, a)] += 1
+            self.Qsa[(s, a)] = (self.times_s_a_visited[(s, a)] * self.Qsa[(s, a)] + v) / (self.times_s_a_visited[(s, a)] + 1)
+            self.times_s_a_visited[(s, a)] += 1
 
         else:
             self.Qsa[(s, a)] = v
-            self.Nsa[(s, a)] = 1
+            self.times_s_a_visited[(s, a)] = 1
 
-        self.Ns[s] += 1
+        self.times_s_visited[s] += 1
         return -v

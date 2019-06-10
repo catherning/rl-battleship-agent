@@ -80,7 +80,9 @@ class Field:
 
             if count_tries > self.placing_limit:
                 ships = np.zeros([self.n, self.n])
-                count = 0
+                count_tries = 0
+                print("Clear ship field!")
+                # xxx wtf removes all the ships, put before, could instead try generate ships again
 
             z = floor(random.random() + 0.5)  # 0 == vertical or 1 == horizontal placement
 
@@ -107,6 +109,7 @@ class Field:
         for s, c in zip(self.ship_sizes, self.ship_count):
             for i in range(0, c):
                 self.place_ship(self.field_of_ships, s)
+                print(f"Ship {i} of size {s} done.")
 
     def count_alive_ship_cells(self, ships):
         """
@@ -139,20 +142,6 @@ class Field:
 
         return -player  # alternate player
 
-    def get_allowed_moves(self):
-        """
-        Get list of locations where it is possible to execute action, undamaged cell[x][y] == 0
-        """
-
-        moves = []
-        for y in range(self.n):
-            for x in range(self.n):
-                if self.field_of_damages[x][y] == 0:
-                    moves.append([x, y])
-                else:
-                    pass
-
-        return moves
 
     def get_clean_field(self):
         """
@@ -167,7 +156,7 @@ class Field:
         Get total number of cells in the environment
         """
 
-        return (self.n, self.n)
+        return self.n, self.n
 
     def get_num_actions(self):
         """
@@ -181,8 +170,9 @@ class Field:
         Copy the battlefield and perform action, return resulted field and player
         """
 
+        # xxx ships doesn't change...
         if action == self.n * self.n:
-            return (ships, damages, -player)
+            return damages, -player
 
         f = Field(self.n)
         f.field_of_ships = np.copy(np.array(ships))
@@ -190,13 +180,26 @@ class Field:
         aim = (int(action / self.n), action % self.n)
         player = f.fire(aim, player)
 
-        return (f.field_of_ships, f.field_of_damages, player)
+        return f.field_of_damages, player
+
+    def get_allowed_moves(self):
+        """
+        Get list of locations where it is possible to execute action, undamaged cell[x][y] == 0
+        """
+
+        moves = []
+        for y in range(self.n):
+            for x in range(self.n):
+                if self.field_of_damages[x][y] == 0:
+                    moves.append([x, y])
+
+        return moves
 
     def get_valid_moves(self, ships, damages):
         """
         Wrap possible actions into valid moves, perform on copied data
         """
-
+        # xxx why copy a new field each time...
         v = [0] * self.get_num_actions()
         f = Field(self.n)
         f.field_of_ships = np.copy(np.array(ships))
@@ -218,8 +221,7 @@ class Field:
         See if there is something left floating..
         """
 
-        f = Field(self.n)
-        if f.count_alive_ship_cells(ships) > 0:
+        if self.count_alive_ship_cells(ships) > 0:
             return 0
         else:
             return player

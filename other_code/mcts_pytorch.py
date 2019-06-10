@@ -32,7 +32,7 @@ class MCTS:
 
         Returns:
             probs: a policy vector where the probability of the ith action is
-                   proportional to Nsa[(s,a)]**(1./temp)
+                   proportional to times_s_a_visited[(s,a)]**(1./temp)
         """
         for i in range(self.sims):
             self.search(ships, damages)  # , 0, 500)
@@ -66,7 +66,7 @@ class MCTS:
         Once a leaf node is found, the neural network is called to return an
         initial policy P and a value v for the state. This value is propogated
         up the search path. In case the leaf node is a terminal state, the
-        outcome is propogated up the search path. The values of Ns, Nsa, Qsa are
+        outcome is propogated up the search path. The values of times_s_visited, times_s_a_visited, Qsa are
         updated.
 
         NOTE: the return values are the negative of the value of the current
@@ -129,9 +129,9 @@ class MCTS:
                     best_act = a
 
         a = best_act
-        next_s, next_d, next_player = self.game.get_next_state(ships, damages, 1, a)
+        next_d, next_player = self.game.get_next_state(ships, damages, 1, a)
 
-        v = self.search(next_s, next_d)
+        v = self.search(ships, next_d)
 
         if (s, a) in self.Qsa:
             self.Qsa[(s, a)] = (self.Nsa[(s, a)] * self.Qsa[(s, a)] + v) / (self.Nsa[(s, a)] + 1)

@@ -57,6 +57,7 @@ class NNet(nn.Module):
     def __init__(self, game):
         super(NNet, self).__init__()
 
+        # TODO change when adapt to new Game code, when switching to Pytorch..
         self.w, self.h = game.get_field_size()
         self.action_size = game.get_num_actions()  # all
 

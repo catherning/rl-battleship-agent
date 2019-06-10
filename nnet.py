@@ -10,9 +10,9 @@ sys.path.append('..')
 
 
 class NNet:
-    def __init__(self, game):
-        self.w, self.h = game.get_field_size()
-        self.action_size = game.get_num_actions()  # all
+    def __init__(self, field_size):
+        self.field_size = field_size
+        self.action_size = field_size ** 2
 
         # Model hyper-parameters
         self.num_channels = 256
@@ -23,7 +23,7 @@ class NNet:
         self.batch_size = 64
         self.adam_lr = 1e-3
 
-        self.input_layer = Input(shape=(self.w, self.h))
+        self.input_layer = Input(shape=(self.field_size, self.field_size,3))
         self.model = None
 
     def cnn_layer(self, x, num_channels=None, filter_size=None, activation='linear', padding='same'):
@@ -79,8 +79,8 @@ class NNet:
 
 class CNNet(NNet):
 
-    def __init__(self, game):
-        super().__init__(game)
+    def __init__(self, field_state):
+        super().__init__(field_state)
 
         self.dropout = 0.3  # only CNN
 
@@ -98,9 +98,9 @@ class CNNet(NNet):
         :return: [a_prob, values]
         """
 
-        x = Reshape((self.w, self.h, 1))(self.input_layer)
+        # x = Reshape((self.field_size, self.field_size, 3))(self.input_layer)
 
-        a_conv1 = self.cnn_layer(x)
+        a_conv1 = self.cnn_layer(self.input_layer)
         a_conv2 = self.cnn_layer(a_conv1)
         a_conv3 = self.cnn_layer(a_conv2, padding='valid')
         a_conv4 = self.cnn_layer(a_conv3, padding='valid')
@@ -122,8 +122,8 @@ class CNNet(NNet):
 
 class ResidualNNet(NNet):
 
-    def __init__(self, game):
-        super().__init__(game)
+    def __init__(self, field_state):
+        super().__init__(field_state)
 
         self.num_residual = 3  # 19 #39 # only residual
         self.value_head_dense = 256  # only residual
@@ -142,8 +142,8 @@ class ResidualNNet(NNet):
         3. A rectifier non-linearity
         """
 
-        x = Reshape((self.w, self.h, 1))(self.input_layer)
-        output = self.cnn_layer(x)
+        # x = Reshape((self.field_size, self.field_size, 3))(self.input_layer)
+        output = self.cnn_layer(self.input_layer)
 
         return output
 
