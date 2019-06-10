@@ -7,6 +7,9 @@ from typing import Iterable, List
 
 import numpy as np
 
+from ai_agent import *
+from nnet import CNNet, ResidualNNet
+
 
 class Player(object):
     def __init__(self):
@@ -143,6 +146,9 @@ class FieldState(object):
 
         return False  # failed to randomly find a free location
 
+    def get_num_actions(self):
+        return self.field_size ** 2
+
     @property
     def state_matrix(self):
         """
@@ -154,6 +160,9 @@ class FieldState(object):
         :return:
         """
         return self._state_matrix
+
+    def possible_moves(self):
+        return np.argwhere(self.state_matrix == CellState.UNTOUCHED)
 
     @property
     def ship_field_matrix(self):
@@ -268,6 +277,7 @@ class Game(object):
                 print(self.field_state_per_player[self._active_player])
 
             opponent_field = self.field_state_per_player[self.non_active_player]
+            # xxx Might need other inputs if agent is AI
             firing_target_y, firing_target_x = self._active_player.choose_firing_target(
                 opponent_field_state_matrix=opponent_field.state_matrix
             )
@@ -285,7 +295,17 @@ class Game(object):
 
 
 if __name__ == '__main__':
-    g = Game(player_1=HumanPlayer(), player_2=RandomAgent(), field_size=10, ship_sizes=[4, 3, 2], ship_counts=[1, 2, 3])
+
+    FIELD_SIZE = 10
+
+    network = "cnn"
+
+    if network == "residual":
+        nnet = ResidualNNet(FIELD_SIZE)  # init NN
+    elif network == "cnn":
+        nnet = CNNet(FIELD_SIZE)
+
+    g = Game(player_1=AIAgent(nnet), player_2=RandomAgent(), field_size=FIELD_SIZE, ship_sizes=[4, 3, 2], ship_counts=[1, 2, 3])
     result = g.play_out()
     print(g.field_state_per_player[result.winner])
     print()
