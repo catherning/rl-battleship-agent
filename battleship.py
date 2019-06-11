@@ -2,7 +2,7 @@ import random
 import re
 from copy import deepcopy
 from enum import Enum
-from typing import List
+from typing import List, Sized
 
 import numpy as np
 
@@ -20,12 +20,15 @@ class Player(object):
         """
         raise NotImplementedError  # override this with RL agent, random agent, and user input player
 
+    def inform_about_result(self, attack_succeeded):
+        pass
+
 
 class RandomAgent(Player):
     def choose_firing_target(self, opponent_field_state_matrix):
         possible_firing_targets = np.argwhere(opponent_field_state_matrix == CellState.UNTOUCHED)
         target_y, target_x = random.choice(possible_firing_targets)
-        return target_y, target_x, None
+        return target_y, target_x
 
 
 class HumanPlayer(Player):
@@ -41,7 +44,7 @@ class HumanPlayer(Player):
                 return input_a_target()
             return y, x
 
-        return input_a_target(), None
+        return input_a_target()
 
 
 class Orientation(Enum):
@@ -57,6 +60,7 @@ class CellState(Enum):
     * UNTOUCHED: no shots have been fired at this cell yet.
     * HIT: a shot has previously been fired at this cell and there is a ship here.
     """
+
     UNTOUCHED = 0
     MISSED = 1
     HIT = 2
@@ -207,9 +211,29 @@ class GameResult(object):
     def __init__(
             self,
             winner,
+            num_turns,
             # todo: add more game info
     ):
+        self.result_dict = {
+            'winner': winner,
+            'num_turns': num_turns
+        }
         self.winner = winner
+        self.num_turns = num_turns
+
+
+class GameConfiguration(object):
+    def __init__(
+            self,
+            field_size,
+            ship_sizes: List[int],
+            ship_counts: List[int],
+            num_random_attempts=50,
+    ):
+        self.field_size = field_size
+        self.ship_sizes = ship_sizes
+        self.ship_counts = ship_counts
+        self.num_random_attempts = num_random_attempts
 
 
 class Game(object):
@@ -217,10 +241,7 @@ class Game(object):
             self,
             player_1: Player,
             player_2: Player,
-            field_size,
-            ship_sizes: List[int],
-            ship_counts: List[int],
-            num_random_attempts=50,
+            game_configuration: GameConfiguration,
     ):
         self._player_1 = player_1
         self._player_2 = player_2
@@ -230,16 +251,18 @@ class Game(object):
         # FieldState which comprises of their ships and the shots that have been fired at it. In each turn, a player
         # can fire at their opponent's FieldState.
         self.field_state_per_player = {
-            player_1: FieldState(field_size=field_size),
-            player_2: FieldState(field_size=field_size)
+            player_1: FieldState(field_size=game_configuration.field_size),
+            player_2: FieldState(field_size=game_configuration.field_size)
         }
 
         for field_state in self.field_state_per_player.values():
-            field_state.generate_ships(
-                ship_sizes=ship_sizes,
-                ship_counts=ship_counts,
-                num_attempts=num_random_attempts,
+            generation_succeeded = field_state.generate_ships(
+                ship_sizes=game_configuration.ship_sizes,
+                ship_counts=game_configuration.ship_counts,
+                num_attempts=game_configuration.num_random_attempts,
             )
+            if not generation_succeeded:
+                raise Exception("Can't generate ship on game field, try a large field or less ships")
 
     def get_opponent(self, player):
         if player == self._player_1:
@@ -254,7 +277,11 @@ class Game(object):
 
     @property
     def non_active_player(self):
-        return self.get_opponent(self._active_player)
+        return self.get_opponent(self.active_player)
+
+    @property
+    def active_player(self):
+        return self._active_player
 
     def play_out(self):
         """
@@ -266,46 +293,48 @@ class Game(object):
 
         finished = False
         winner = None
-
-        history_a_prob = []
-        history_states = []
-        history_success = []
+        num_turns = 0
 
         while not finished:
-            if type(self._active_player) is HumanPlayer:
-                print(self.field_state_per_player[self._active_player])
+            num_turns += 1
+
+            if type(self.active_player) is HumanPlayer:
+                print(self.field_state_per_player[self.active_player])
 
             opponent_field = self.field_state_per_player[self.non_active_player]
 
-            # xxx needs to return a_prob for AI agent
-            firing_target_y, firing_target_x, a_prob = self._active_player.choose_firing_target(
+            firing_target_y, firing_target_x = self.active_player.choose_firing_target(
                 opponent_field_state_matrix=opponent_field.state_matrix
             )
             succeeded = opponent_field.fire_at_target(y=firing_target_y, x=firing_target_x)
-            # todo: if it's an RL agent, return the reward
-            # self._active_player.give_reward(succeeded)
-
-            # xxx saving all data of AI playing, not other player
-            if a_prob is not None:
-                history_states.append(np.copy(opponent_field.state_matrix))
-                history_success.append(succeeded) # convert to 1 and 0 ?
-                history_a_prob.append(a_prob)
+            self.active_player.inform_about_result(attack_succeeded=succeeded)
 
             if opponent_field.is_alive:
                 self.switch_active_player()
             else:
                 finished = True
-                winner = self._active_player
+                winner = self.active_player
 
-        return GameResult(winner=winner), history_states, history_a_prob, history_success
+        return GameResult(winner=winner, num_turns=num_turns)
 
 
-if __name__ == '__main__':
-    FIELD_SIZE = 10
+class Tournament(object):
+    def __init__(
+            self,
+            player_1: Player,
+            player_2: Player,
+            game_configuration: GameConfiguration,
+            num_games: int,
+    ):
+        self.player_1 = player_1
+        self.player_2 = player_2
+        self.game_configuration = game_configuration
+        self.num_games = num_games
 
-    g = Game(player_1=HumanPlayer(), player_2=RandomAgent(), field_size=FIELD_SIZE, ship_sizes=[4, 3, 2],
-             ship_counts=[1, 2, 3])
-    result,_,_ = g.play_out()
-    print(g.field_state_per_player[result.winner])
-    print()
-    print(g.field_state_per_player[g.get_opponent(result.winner)])
+    def play_out(self):
+        tournament_results = []
+        for _ in range(self.num_games):
+            game = Game(player_1=self.player_1, player_2=self.player_2, game_configuration=self.game_configuration)
+            game_result = game.play_out()
+            tournament_results.append(game_result)
+        return tournament_results
