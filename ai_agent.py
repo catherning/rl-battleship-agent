@@ -7,11 +7,11 @@ import battleship
 
 def state_to_nnet_input(field):
     size_field = len(field)
-    input_ = np.zeros((size_field, size_field, 3))
+    input_ = np.zeros((3, size_field, size_field)) # change position of 3 and of [i] depending on Keras or Pytorch
     for i, state in enumerate(battleship.CellState):
         cells_in_state = np.argwhere(field == state)
         for cell in cells_in_state:
-            input_[cell[0]][cell[1]][i] = 1
+            input_[i][cell[0]][cell[1]] = 1
 
     return input_
 
