@@ -72,12 +72,13 @@ def save_network_parameters(network: nn.Module, optimizer, model_save_dir):
     )
 
 
-def load_network_parameters(model, optimizer: torch.optim.Adam, path):
+def load_network_parameters(path, model, optimizer=None):
     if not os.path.exists(path):
         raise Exception(f"{path} doesn't exist.")
     saved_model = torch.load(path)
-    model.load_state_dict(saved_model["model_state_dict"])
-    optimizer.load_state_dict(saved_model['optimizer_state_dict'])
+    model.load_state_dict(saved_model["network_state_dict"])
+    if optimizer is not None:
+        optimizer.load_state_dict(saved_model['optimizer_state_dict'])
 
 
 def train(network: ResidualNNet, optimizer, states, actions, rewards, epochs, batch_size, use_gpu):
@@ -108,6 +109,18 @@ def train(network: ResidualNNet, optimizer, states, actions, rewards, epochs, ba
     return mean_loss
 
 
+def evaluate(agent: AIAgent, game_configuration):
+    agent.network.eval()
+    tournament = Tournament(player_1=agent, player_2=RandomAgent(), game_configuration=game_configuration,
+                            num_games=100)
+    results = tournament.play_out(verbose=True)
+    win_count = 0
+    for result in results:
+        if result.winner == agent:
+            win_count += 1
+    print(win_count)
+
+
 def main():
     args = build_arg_parser().parse_args()
 
@@ -121,10 +134,17 @@ def main():
         ship_sizes=args.ship_sizes, ship_counts=args.ship_counts
     )
 
-    optimizer = torch.optim.Adam(agent_network.parameters())
-    results_per_episode = []
-
     agent = AIAgent(agent_network)
+    optimizer = torch.optim.Adam(agent_network.parameters())
+
+    if args.load_model is not None:
+        load_network_parameters(args.load_model, agent_network, optimizer)
+
+    if args.eval:
+        evaluate(agent, game_configuration)
+        return
+
+    results_per_episode = []
 
     try:
         for episode_i in range(args.episodes):
