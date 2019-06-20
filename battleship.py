@@ -331,10 +331,13 @@ class Tournament(object):
         self.game_configuration = game_configuration
         self.num_games = num_games
 
-    def play_out(self):
+    def play_out(self, verbose=False):
         tournament_results = []
-        for _ in range(self.num_games):
+        print('Starting tournament..')
+        for i in range(self.num_games):
             game = Game(player_1=self.player_1, player_2=self.player_2, game_configuration=self.game_configuration)
             game_result = game.play_out()
             tournament_results.append(game_result)
+            if verbose:
+                print(f'Game {i} winner = {game_result.winner}')
         return tournament_results
