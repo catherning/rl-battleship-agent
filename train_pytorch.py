@@ -21,10 +21,10 @@ CURRENT_DIRECTORY = os.path.dirname(__file__)
 def build_arg_parser():
     parser = argparse.ArgumentParser()
     parser.add_argument("--episodes", default=20000, type=int, help="number of episodes to train for.")
-    parser.add_argument("--game_field_size", default=6, type=int, help="size of the playing field.")
+    parser.add_argument("--game_field_size", default=5, type=int, help="size of the playing field.")
     parser.add_argument("--ship_sizes", default=[4, 3, 2], type=int, nargs=3, help="ship sizes")
     parser.add_argument("--ship_counts", default=[1, 2, 3], type=int, nargs=3, help="ship count per size")
-    parser.add_argument("--epochs", default=3, type=int, help="number of epochs to train after each episode.")
+    parser.add_argument("--epochs", default=1, type=int, help="number of epochs to train after each episode.")
     parser.add_argument("--history_size", default=400, type=int,
                         help="number of recent episodes to remember for training.")
     parser.add_argument("--batch_size", default=50, type=int, help="Batch size to use during training.")
