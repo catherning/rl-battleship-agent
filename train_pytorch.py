@@ -21,13 +21,13 @@ CURRENT_DIRECTORY = os.path.dirname(__file__)
 def build_arg_parser():
     parser = argparse.ArgumentParser()
     parser.add_argument("--episodes", default=20000, type=int, help="number of episodes to train for.")
-    parser.add_argument("--game_field_size", default=5, type=int, help="size of the playing field.")
-    parser.add_argument("--ship_sizes", default=[4, 3, 2], type=int, nargs=3, help="ship sizes")
-    parser.add_argument("--ship_counts", default=[1, 2, 3], type=int, nargs=3, help="ship count per size")
+    parser.add_argument("--game_field_size", default=6, type=int, help="size of the playing field.")
+    parser.add_argument("--ship_sizes", default=[4], type=int, nargs=3, help="ship sizes")
+    parser.add_argument("--ship_counts", default=[2], type=int, nargs=3, help="ship count per size")
     parser.add_argument("--epochs", default=1, type=int, help="number of epochs to train after each episode.")
-    parser.add_argument("--history_size", default=400, type=int,
+    parser.add_argument("--history_size", default=200, type=int,
                         help="number of recent episodes to remember for training.")
-    parser.add_argument("--batch_size", default=50, type=int, help="Batch size to use during training.")
+    parser.add_argument("--batch_size", default=500, type=int, help="Batch size to use during training.")
     parser.add_argument("--display_freq", default=1, type=int, help="Display frequency")
     parser.add_argument("--save_freq", default=5, type=int, help="Save every x episodes.")
     parser.add_argument("--learning_rate", default=0.001, type=float, help="Learning rate for optimizer")
@@ -43,7 +43,6 @@ def build_arg_parser():
                         default=None,
                         type=str, help="the path where the model's learned parameters will be stored.")
     parser.add_argument("--eval", action='store_true', help="Evaluate instead of training")
-    parser.add_argument("--gpu", action='store_true', help="Use GPU")
     return parser
 
 
@@ -93,10 +92,30 @@ def load_network_parameters(path, model, optimizer=None):
 #     - move evaluation to different file
 
 
+def build_dataset(state_history, actual_untouched_ship_indices_history):
+    """
+
+    :param state_history: a list of state tensors
+    :param actual_untouched_ship_indices_history: a list of index lists (for each state there are multiple
+    attackable ships)
+    :return:
+    """
+
+    trainable_states = []
+    trainable_labels = []
+
+    for state, actual_untouched_ship_indices in zip(state_history, actual_untouched_ship_indices_history):
+        for index in actual_untouched_ship_indices:
+            trainable_states.append(state)
+            trainable_labels.append(index)
+
+    return TensorDataset(torch.stack(trainable_states), torch.tensor(trainable_labels))
+
+
 def train(network: ResidualNNet, optimizer,
-          states, rewards, actual_fields_with_untouched_ship_cells,
-          epochs, batch_size, use_gpu):
-    dataset = TensorDataset(states, actual_fields_with_untouched_ship_cells, rewards)
+          state_history, actual_ship_position_labels_history,
+          epochs, batch_size):
+    dataset = build_dataset(state_history, actual_ship_position_labels_history)
     data_loader = DataLoader(dataset, batch_size, shuffle=True)
 
     losses = []
@@ -104,20 +123,13 @@ def train(network: ResidualNNet, optimizer,
     for epoch in range(epochs):
         optimizer.zero_grad()
 
-        for batch_i, (state_batch, actual_field_with_untouched_ship_cells_batch, reward_batch) in enumerate(data_loader):
-            if use_gpu:
-                state_batch = state_batch.cuda()
-                actual_field_with_untouched_ship_cells_batch = actual_field_with_untouched_ship_cells_batch.cuda()
-                reward_batch = reward_batch.cuda()
-
+        for batch_i, (state_batch, ship_position_label_batch) in enumerate(data_loader):
             predicted_policy, predicted_values, predicted_logits = network(state_batch)
             log_predicted_policy = torch.log(predicted_policy)
 
             # loss = functional.mse_loss(predicted_values.squeeze(dim=1), reward_batch)
             # loss += functional.nll_loss(log_predicted_policy, actual_field_with_untouched_ship_cells_batch)
-            loss = functional.binary_cross_entropy_with_logits(
-                predicted_logits, actual_field_with_untouched_ship_cells_batch
-            )
+            loss = functional.nll_loss(log_predicted_policy, ship_position_label_batch)
             loss.backward()
             losses.append(float(loss))
             optimizer.step()
@@ -129,7 +141,7 @@ def train(network: ResidualNNet, optimizer,
 def evaluate(agent: AIAgent, game_configuration):
     agent.eval()
     random_agent = RandomAgent()
-    tournament = Tournament(player_1=agent, player_2=random_agent, game_configuration=game_configuration, num_games=50)
+    tournament = Tournament(player_1=agent, player_2=random_agent, game_configuration=game_configuration, num_games=150)
     results = tournament.play_out(verbose=True)
     agent_win_count = sum(result.winner == agent for result in results)
     random_win_count = sum(result.winner == random_agent for result in results)
@@ -140,6 +152,9 @@ def evaluate(agent: AIAgent, game_configuration):
 
 def main():
     args = build_arg_parser().parse_args()
+
+    if torch.cuda.is_available():
+        torch.set_default_tensor_type(torch.cuda.FloatTensor)
 
     if args.network_type == 'ResNet':
         agent_network = ResidualNNet(args.game_field_size)
@@ -173,10 +188,8 @@ def main():
             loss = train(
                 network=agent_network,
                 optimizer=optimizer,
-                states=torch.stack(agent.observed_state_history),
-                rewards=torch.tensor(agent.reward_history, dtype=torch.float),
-                actions=torch.stack(agent.action_history),
-                actual_fields_with_untouched_ship_cells=torch.stack(agent.actual_field_with_untouched_ship_cells_history),
+                state_history=agent.observed_state_history,
+                actual_ship_position_labels_history=agent.actual_ship_position_labels_history,
                 epochs=args.epochs,
                 batch_size=args.batch_size,
                 use_gpu=args.gpu,
@@ -185,7 +198,11 @@ def main():
             results_per_episode.append(episode_results)
 
             if episode_i % args.display_freq == 0:
-                print(f'{datetime.now()} - Episode {episode_i} - {episode_results.num_turns} turns - loss = {loss:.4f}')
+                print(f'{datetime.now()} - '
+                      f'Episode {episode_i} - '
+                      f'{episode_results.num_turns} turns - '
+                      f'loss = {loss:.4f} - '
+                      f'winner = {episode_results.winner}')
 
             if episode_i % args.save_freq == 0 and episode_i > 0:
                 save_training_results(results_per_episode=results_per_episode, path=args.results_csv_path)

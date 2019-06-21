@@ -60,9 +60,9 @@ class AIAgent(battleship.Player):
         self.reward_history = HistoryList(max_history_size)
         self.observed_state_history = HistoryList(max_history_size)
         self.actual_field_with_untouched_ship_cells_history = HistoryList(max_history_size)
+        self.actual_ship_position_labels_history = HistoryList(max_history_size)
 
         self.training = False
-
         self.new_experience = None
 
     def train(self, mode=True):
@@ -121,5 +121,5 @@ class AIAgent(battleship.Player):
         )
         field_with_untouched_cells_1d = field_with_untouched_cells_2d.view(-1)
         self.actual_field_with_untouched_ship_cells_history.append(field_with_untouched_cells_1d)
-
-        # ship_position_labels_1d = (field_with_untouched_cells_1d == battleship.CellOccupancy.HAS_SHIP.value).nonzero()
+        ship_position_labels_1d = (field_with_untouched_cells_1d == battleship.CellOccupancy.HAS_SHIP.value).nonzero()
+        self.actual_ship_position_labels_history.append(ship_position_labels_1d)
