@@ -125,7 +125,7 @@ def train(network: ResidualNNet, optimizer,
         optimizer.zero_grad()
 
         for batch_i, (state_batch, ship_position_label_batch) in enumerate(data_loader):
-            predicted_policy, predicted_values, predicted_logits = network(state_batch)
+            predicted_policy = network(state_batch)
             log_predicted_policy = torch.log(predicted_policy)
 
             loss = functional.nll_loss(log_predicted_policy, ship_position_label_batch)

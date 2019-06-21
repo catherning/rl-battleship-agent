@@ -206,7 +206,10 @@ class ResidualNNet(nn.Module):
 
         num_cells_in_game_field = game_field_size * game_field_size
         action_dims = num_cells_in_game_field
-        self.policy_logits_layer = nn.Linear(in_features=num_cells_in_game_field, out_features=action_dims)
+        self.policy_output_layer = nn.Sequential(
+            nn.Linear(in_features=num_cells_in_game_field, out_features=action_dims),
+            nn.Softmax(),
+        )
 
         print(self)
 
@@ -223,26 +226,6 @@ class ResidualNNet(nn.Module):
 
         return output
 
-    def value_head(self, x):
-        """
-        1. A convolution of 1 filter of kernel size 1 × 1 with stride 1
-        2. Batch normalisation
-        3. A rectifier non-linearity
-        4. A fully connected linear layer to a hidden layer of size 256
-        5. A rectifier non-linearity
-        6. A fully connected linear layer to a scalar
-        7. A tanh non-linearity outputting a scalar in the range [−1, 1]
-
-        :param x:
-        :return:
-        """
-        activ_1 = self.value_conv_1(x)
-        flatt_2 = activ_1.view(activ_1.shape[0], -1)
-
-        values = self.value_out_layer(flatt_2)
-
-        return values
-
     def policy_head(self, x):
         """
         1. A convolution of 2 filters of kernel size 1 × 1 with stride 1
@@ -257,10 +240,9 @@ class ResidualNNet(nn.Module):
         activ_1 = self.policy_conv_1(x)
 
         flatt_2 = activ_1.view(activ_1.shape[0], -1)
-        a_logits = self.policy_logits_layer(flatt_2)
-        a_prob = functional.softmax(a_logits)
+        a_prob = self.policy_output_layer(flatt_2)
 
-        return a_logits, a_prob
+        return a_prob
 
     def forward(self, input_):
         """
@@ -279,7 +261,6 @@ class ResidualNNet(nn.Module):
         for residual_block in self.residual_blocks:
             residuals = residual_block(residuals)
 
-        values = self.value_head(residuals)
-        a_logits, a_prob = self.policy_head(residuals)
+        a_prob = self.policy_head(residuals)
 
-        return a_prob, values, a_logits
+        return a_prob

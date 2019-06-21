@@ -86,8 +86,7 @@ class AIAgent(battleship.Player):
 
         network_input_batch = network_input.unsqueeze(0)  # shape = [batch_size, channels, field_size, field_size]
 
-        output_policy_1d, _, _ = self.network(network_input_batch)  # shape = [batch_size, field_height * field_width]
-        output_policy_1d = output_policy_1d.squeeze(dim=0)  # shape = [field_height * field_width]
+        output_policy_1d = self.network(network_input_batch).squeeze(dim=0)  # shape = [field_height * field_width]
         filtered_policy_1d = remove_impossible_moves(output_policy_1d, opponent_field_state_tensor_1d)
 
         if self.training:
