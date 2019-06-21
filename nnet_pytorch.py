@@ -207,10 +207,7 @@ class ResidualNNet(nn.Module):
 
         num_cells_in_game_field = game_field_size * game_field_size
         action_dims = num_cells_in_game_field
-        self.policy_out_layer = nn.Sequential(
-            nn.Linear(in_features=num_cells_in_game_field, out_features=action_dims),
-            nn.Softmax()
-        )
+        self.policy_logits_layer = nn.Linear(in_features=num_cells_in_game_field, out_features=action_dims)
 
         print(self)
 
@@ -261,9 +258,10 @@ class ResidualNNet(nn.Module):
         activ_1 = self.policy_conv_1(x)
 
         flatt_2 = activ_1.view(activ_1.shape[0], -1)
-        a_prob = self.policy_out_layer(flatt_2)
+        a_logits = self.policy_logits_layer(flatt_2)
+        a_prob = functional.softmax(a_logits)
 
-        return a_prob
+        return a_logits, a_prob
 
     def forward(self, input_):
         """
@@ -283,6 +281,6 @@ class ResidualNNet(nn.Module):
             residuals = residual_block(residuals)
 
         values = self.value_head(residuals)
-        a_prob = self.policy_head(residuals)
+        a_logits, a_prob = self.policy_head(residuals)
 
-        return a_prob, values
+        return a_prob, values, a_logits

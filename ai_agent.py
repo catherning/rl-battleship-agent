@@ -34,25 +34,36 @@ def remove_impossible_moves(policy_1d: torch.Tensor, opponent_field_state_tensor
     filtered_policy_matrix = torch.zeros(policy_1d.shape)
     filtered_policy_matrix[possible_firing_targets] = policy_1d[possible_firing_targets]
 
-    # for y, x in possible_firing_targets:
-    #     filtered_policy_matrix[y, x] = policy_1d[y, x]
-
     normalized_policy_matrix = filtered_policy_matrix / filtered_policy_matrix.sum()
 
     assert 0.999 < normalized_policy_matrix.sum() < 1.0001
     return normalized_policy_matrix
 
 
+class HistoryList(list):
+    def __init__(self, max_size):
+        super().__init__()
+        self.max_size = max_size
+
+    def append(self, object) -> None:
+        super().append(object)
+        if len(self) > self.max_size:
+            self.pop(0)
+
+
 class AIAgent(battleship.Player):
-    def __init__(self, network: torch.nn.Module):
+    def __init__(self, network: torch.nn.Module, max_history_size):
         super().__init__()
         self.network = network
 
-        self.policy_history = []
-        self.action_history = []
-        self.reward_history = []
-        self.state_history = []
+        self.action_history = HistoryList(max_history_size)
+        self.reward_history = HistoryList(max_history_size)
+        self.observed_state_history = HistoryList(max_history_size)
+        self.actual_field_with_untouched_ship_cells_history = HistoryList(max_history_size)
+
         self.training = False
+
+        self.new_experience = None
 
     def train(self, mode=True):
         self.network.train(mode)
@@ -75,10 +86,10 @@ class AIAgent(battleship.Player):
         opponent_field_state_tensor_1d = opponent_field_state_tensor_2d.view(-1)  # shape = [field_height * field_width]
 
         network_input = convert_cell_states_to_channels(opponent_field_state_tensor_2d)
-        self.state_history.append(network_input)
+
         network_input_batch = network_input.unsqueeze(0)  # shape = [batch_size, channels, field_size, field_size]
 
-        output_policy_1d, _ = self.network(network_input_batch)  # shape = [batch_size, field_height * field_width]
+        output_policy_1d, _, _ = self.network(network_input_batch)  # shape = [batch_size, field_height * field_width]
         output_policy_1d = output_policy_1d.squeeze(dim=0)  # shape = [field_height * field_width]
         filtered_policy_1d = remove_impossible_moves(output_policy_1d, opponent_field_state_tensor_1d)
 
@@ -90,14 +101,25 @@ class AIAgent(battleship.Player):
         firing_target_x = sample_1d_index % field_width
         assert opponent_field_state_tensor_2d[firing_target_y, firing_target_x] == battleship.CellState.UNTOUCHED.value
 
-        self.action_history.append(sample_1d_index)
-        self.policy_history.append(output_policy_1d)
+        # save experiences for later training:
+        self.action_history.append(torch.tensor(sample_1d_index))
+        self.observed_state_history.append(network_input)
 
         return firing_target_y, firing_target_x
 
-    def inform_about_result(self, attack_succeeded):
+    def inform_about_result(self, attack_succeeded, actual_opponent_field_state: battleship.FieldState):
         if attack_succeeded:
             reward = 1
         else:
             reward = -1
         self.reward_history.append(reward)
+
+        field_with_untouched_cells_2d = torch.tensor(
+                actual_opponent_field_state.ship_field_matrix
+                & (actual_opponent_field_state.state_matrix == battleship.CellState.UNTOUCHED.value),
+                dtype=torch.float
+        )
+        field_with_untouched_cells_1d = field_with_untouched_cells_2d.view(-1)
+        self.actual_field_with_untouched_ship_cells_history.append(field_with_untouched_cells_1d)
+
+        # ship_position_labels_1d = (field_with_untouched_cells_1d == battleship.CellOccupancy.HAS_SHIP.value).nonzero()

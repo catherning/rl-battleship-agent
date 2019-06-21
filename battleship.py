@@ -20,7 +20,7 @@ class Player(object):
         """
         raise NotImplementedError  # override this with RL agent, random agent, and user input player
 
-    def inform_about_result(self, attack_succeeded):
+    def inform_about_result(self, attack_succeeded, actual_opponent_field_state):
         pass
 
 
@@ -307,8 +307,9 @@ class Game(object):
                 firing_target_y, firing_target_x = self.active_player.choose_firing_target(
                     opponent_field_state_matrix=opponent_field.state_matrix
                 )
+                old_field_state = opponent_field.copy()
                 succeeded = opponent_field.fire_at_target(y=firing_target_y, x=firing_target_x)
-                self.active_player.inform_about_result(attack_succeeded=succeeded)
+                self.active_player.inform_about_result(succeeded, old_field_state)
 
                 if not opponent_field.is_alive:
                     if game_finished:

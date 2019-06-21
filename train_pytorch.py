@@ -80,9 +80,18 @@ def load_network_parameters(path, model, optimizer=None):
     if optimizer is not None:
         optimizer.load_state_dict(saved_model['optimizer_state_dict'])
 
+# todo:
+#     - improve experience history keeping
+#     - add actual ship positions to history
+#     - define loss as sum of cross entropy between policy and each actual ship position
+#     - add MC search for actual probabilities of ship positions based on discovered ships
+#     - move evaluation to different file
 
-def train(network: ResidualNNet, optimizer, states, actions, rewards, epochs, batch_size, use_gpu):
-    dataset = TensorDataset(states, actions, rewards)
+
+def train(network: ResidualNNet, optimizer,
+          states, rewards, actual_fields_with_untouched_ship_cells,
+          epochs, batch_size, use_gpu):
+    dataset = TensorDataset(states, actual_fields_with_untouched_ship_cells, rewards)
     data_loader = DataLoader(dataset, batch_size, shuffle=True)
 
     losses = []
@@ -90,17 +99,20 @@ def train(network: ResidualNNet, optimizer, states, actions, rewards, epochs, ba
     for epoch in range(epochs):
         optimizer.zero_grad()
 
-        for batch_i, (state_batch, action_batch, reward_batch) in enumerate(data_loader):
+        for batch_i, (state_batch, actual_field_with_untouched_ship_cells_batch, reward_batch) in enumerate(data_loader):
             if use_gpu:
                 state_batch = state_batch.cuda()
-                action_batch = action_batch.cuda()
+                actual_field_with_untouched_ship_cells_batch = actual_field_with_untouched_ship_cells_batch.cuda()
                 reward_batch = reward_batch.cuda()
 
-            predicted_policy, predicted_values = network(state_batch)
+            predicted_policy, predicted_values, predicted_logits = network(state_batch)
             log_predicted_policy = torch.log(predicted_policy)
 
-            loss = functional.mse_loss(predicted_values.squeeze(dim=1), reward_batch)
-            loss += functional.nll_loss(log_predicted_policy, action_batch.squeeze(dim=1).squeeze(1))
+            # loss = functional.mse_loss(predicted_values.squeeze(dim=1), reward_batch)
+            # loss += functional.nll_loss(log_predicted_policy, actual_field_with_untouched_ship_cells_batch)
+            loss = functional.binary_cross_entropy_with_logits(
+                predicted_logits, actual_field_with_untouched_ship_cells_batch
+            )
             loss.backward()
             losses.append(float(loss))
             optimizer.step()
@@ -134,8 +146,8 @@ def main():
         ship_sizes=args.ship_sizes, ship_counts=args.ship_counts
     )
 
-    agent = AIAgent(agent_network)
-    optimizer = torch.optim.Adam(agent_network.parameters())
+    agent = AIAgent(agent_network, args.history_size)
+    optimizer = torch.optim.Adam(agent_network.parameters(), lr=args.learning_rate)
 
     if args.load_model is not None:
         load_network_parameters(args.load_model, agent_network, optimizer)
@@ -148,22 +160,18 @@ def main():
 
     try:
         for episode_i in range(args.episodes):
-            game = Game(player_1=agent, player_2=agent, game_configuration=game_configuration)
+            game = Game(player_1=agent, player_2=RandomAgent(), game_configuration=game_configuration)
             agent.train()
             episode_results = game.play_out()
-
-            if len(agent.state_history) > args.history_size:
-                agent.state_history.pop(0)
-                agent.reward_history.pop(0)
-                agent.action_history.pop(0)
 
             agent.train()
             loss = train(
                 network=agent_network,
                 optimizer=optimizer,
-                states=torch.stack(agent.state_history),
+                states=torch.stack(agent.observed_state_history),
                 rewards=torch.tensor(agent.reward_history, dtype=torch.float),
                 actions=torch.stack(agent.action_history),
+                actual_fields_with_untouched_ship_cells=torch.stack(agent.actual_field_with_untouched_ship_cells_history),
                 epochs=args.epochs,
                 batch_size=args.batch_size,
                 use_gpu=args.gpu,
