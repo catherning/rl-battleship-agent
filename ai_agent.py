@@ -1,4 +1,3 @@
-import numpy as np
 import torch
 from torch.nn import functional
 
@@ -56,8 +55,6 @@ class AIAgent(battleship.Player):
         super().__init__()
         self.network = network
 
-        self.action_history = HistoryList(max_history_size)
-        self.reward_history = HistoryList(max_history_size)
         self.observed_state_history = HistoryList(max_history_size)
         self.actual_field_with_untouched_ship_cells_history = HistoryList(max_history_size)
         self.actual_ship_position_labels_history = HistoryList(max_history_size)
@@ -102,18 +99,11 @@ class AIAgent(battleship.Player):
         assert opponent_field_state_tensor_2d[firing_target_y, firing_target_x] == battleship.CellState.UNTOUCHED.value
 
         # save experiences for later training:
-        self.action_history.append(torch.tensor(sample_1d_index))
         self.observed_state_history.append(network_input)
 
         return firing_target_y, firing_target_x
 
     def inform_about_result(self, attack_succeeded, actual_opponent_field_state: battleship.FieldState):
-        if attack_succeeded:
-            reward = 1
-        else:
-            reward = -1
-        self.reward_history.append(reward)
-
         field_with_untouched_cells_2d = torch.tensor(
                 actual_opponent_field_state.ship_field_matrix
                 & (actual_opponent_field_state.state_matrix == battleship.CellState.UNTOUCHED.value),

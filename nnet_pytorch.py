@@ -171,7 +171,6 @@ class ResidualBlock(nn.Module):
 
 
 class ResidualNNet(nn.Module):
-
     def __init__(self, game_field_size, num_filters=256, filter_size=3, num_residual_blocks=3, value_out_dims=128):
         super().__init__()
 

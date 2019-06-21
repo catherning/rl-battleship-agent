@@ -43,6 +43,7 @@ def build_arg_parser():
                         default=None,
                         type=str, help="the path where the model's learned parameters will be stored.")
     parser.add_argument("--eval", action='store_true', help="Evaluate instead of training")
+    parser.add_argument("--eval_num_games", action='store', type=int, default=150, help="Evaluate instead of training")
     return parser
 
 
@@ -127,8 +128,6 @@ def train(network: ResidualNNet, optimizer,
             predicted_policy, predicted_values, predicted_logits = network(state_batch)
             log_predicted_policy = torch.log(predicted_policy)
 
-            # loss = functional.mse_loss(predicted_values.squeeze(dim=1), reward_batch)
-            # loss += functional.nll_loss(log_predicted_policy, actual_field_with_untouched_ship_cells_batch)
             loss = functional.nll_loss(log_predicted_policy, ship_position_label_batch)
             loss.backward()
             losses.append(float(loss))
@@ -138,10 +137,11 @@ def train(network: ResidualNNet, optimizer,
     return mean_loss
 
 
-def evaluate(agent: AIAgent, game_configuration):
+def evaluate(agent: AIAgent, game_configuration, num_games):
     agent.eval()
     random_agent = RandomAgent()
-    tournament = Tournament(player_1=agent, player_2=random_agent, game_configuration=game_configuration, num_games=150)
+    tournament = Tournament(player_1=agent, player_2=random_agent, game_configuration=game_configuration,
+                            num_games=num_games)
     results = tournament.play_out(verbose=True)
     agent_win_count = sum(result.winner == agent for result in results)
     random_win_count = sum(result.winner == random_agent for result in results)
@@ -173,7 +173,7 @@ def main():
         load_network_parameters(args.load_model, agent_network, optimizer)
 
     if args.eval:
-        evaluate(agent, game_configuration)
+        evaluate(agent, game_configuration, args.eval_num_games)
         return
 
     results_per_episode = []
@@ -192,7 +192,6 @@ def main():
                 actual_ship_position_labels_history=agent.actual_ship_position_labels_history,
                 epochs=args.epochs,
                 batch_size=args.batch_size,
-                use_gpu=args.gpu,
             )
             episode_results.result_dict['loss'] = loss
             results_per_episode.append(episode_results)
