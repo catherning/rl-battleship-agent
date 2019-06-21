@@ -70,6 +70,11 @@ def save_network_parameters(network: nn.Module, optimizer, model_save_dir):
          "optimizer_state_dict": optimizer.state_dict()},
         os.path.join(model_save_dir, file_name)
     )
+    torch.save(
+        {"network_state_dict": network.state_dict(),
+         "optimizer_state_dict": optimizer.state_dict()},
+        os.path.join(model_save_dir, 'model_latest.torch')
+    )
 
 
 def load_network_parameters(path, model, optimizer=None):
