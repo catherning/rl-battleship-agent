@@ -30,7 +30,7 @@ def build_arg_parser():
     parser.add_argument("--batch_size", default=50, type=int, help="Batch size to use during training.")
     parser.add_argument("--display_freq", default=1, type=int, help="Display frequency")
     parser.add_argument("--save_freq", default=5, type=int, help="Save every x episodes.")
-    parser.add_argument("--learning_rate", default=0.01, type=float, help="Learning rate for optimizer")
+    parser.add_argument("--learning_rate", default=0.001, type=float, help="Learning rate for optimizer")
     parser.add_argument("--network_type", default='ResNet', type=str,
                         choices=['ResNet', 'CNN'], help="the type of network the agent uses")
     parser.add_argument("--results_csv_path",
