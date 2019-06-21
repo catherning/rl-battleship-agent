@@ -291,29 +291,32 @@ class Game(object):
         # players take turns firing at their opponent
         # if a full ship has been hit, the owner of the ship must announce this
 
-        finished = False
+        game_finished = False
         winner = None
         num_turns = 0
 
-        while not finished:
+        while not game_finished:
             num_turns += 1
 
-            if type(self.active_player) is HumanPlayer:
-                print(self.field_state_per_player[self.active_player])
+            for _ in range(2):
+                if type(self.active_player) is HumanPlayer:
+                    print(self.field_state_per_player[self.active_player])
 
-            opponent_field = self.field_state_per_player[self.non_active_player]
+                opponent_field = self.field_state_per_player[self.non_active_player]
 
-            firing_target_y, firing_target_x = self.active_player.choose_firing_target(
-                opponent_field_state_matrix=opponent_field.state_matrix
-            )
-            succeeded = opponent_field.fire_at_target(y=firing_target_y, x=firing_target_x)
-            self.active_player.inform_about_result(attack_succeeded=succeeded)
+                firing_target_y, firing_target_x = self.active_player.choose_firing_target(
+                    opponent_field_state_matrix=opponent_field.state_matrix
+                )
+                succeeded = opponent_field.fire_at_target(y=firing_target_y, x=firing_target_x)
+                self.active_player.inform_about_result(attack_succeeded=succeeded)
 
-            if opponent_field.is_alive:
+                if not opponent_field.is_alive:
+                    if game_finished:
+                        winner = None  # both players finished in the same turn
+                    else:
+                        game_finished = True
+                        winner = self.active_player
                 self.switch_active_player()
-            else:
-                finished = True
-                winner = self.active_player
 
         return GameResult(winner=winner, num_turns=num_turns)
 
@@ -333,7 +336,8 @@ class Tournament(object):
 
     def play_out(self, verbose=False):
         tournament_results = []
-        print('Starting tournament..')
+        if verbose:
+            print('Starting tournament..')
         for i in range(self.num_games):
             game = Game(player_1=self.player_1, player_2=self.player_2, game_configuration=self.game_configuration)
             game_result = game.play_out()
