@@ -149,7 +149,7 @@ def main():
     try:
         for episode_i in range(args.episodes):
             game = Game(player_1=agent, player_2=agent, game_configuration=game_configuration)
-            agent_network.eval()
+            agent.train()
             episode_results = game.play_out()
 
             if len(agent.state_history) > args.history_size:
@@ -157,7 +157,7 @@ def main():
                 agent.reward_history.pop(0)
                 agent.action_history.pop(0)
 
-            agent_network.train()
+            agent.train()
             loss = train(
                 network=agent_network,
                 optimizer=optimizer,
