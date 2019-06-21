@@ -110,15 +110,15 @@ def train(network: ResidualNNet, optimizer, states, actions, rewards, epochs, ba
 
 
 def evaluate(agent: AIAgent, game_configuration):
-    agent.network.eval()
-    tournament = Tournament(player_1=agent, player_2=RandomAgent(), game_configuration=game_configuration,
-                            num_games=100)
+    agent.eval()
+    random_agent = RandomAgent()
+    tournament = Tournament(player_1=agent, player_2=random_agent, game_configuration=game_configuration, num_games=50)
     results = tournament.play_out(verbose=True)
-    win_count = 0
-    for result in results:
-        if result.winner == agent:
-            win_count += 1
-    print(win_count)
+    agent_win_count = sum(result.winner == agent for result in results)
+    random_win_count = sum(result.winner == random_agent for result in results)
+    draw_count = len(results) - agent_win_count - random_win_count
+
+    print(f'agent wins = {agent_win_count}; random wins = {random_win_count}; draws = {draw_count}')
 
 
 def main():
