@@ -56,7 +56,7 @@ class AIAgent(battleship.Player):
         self.network = network
 
         self.observed_state_history = HistoryList(max_history_size)
-        self.actual_field_with_untouched_ship_cells_history = HistoryList(max_history_size)
+        self.actual_field_with_untouched_ship_cells_history = HistoryList(max_history_size) #TODO remove ?
         self.actual_ship_position_labels_history = HistoryList(max_history_size)
 
         self.training = False
@@ -103,10 +103,9 @@ class AIAgent(battleship.Player):
         return firing_target_y, firing_target_x
 
     def inform_about_result(self, attack_succeeded, actual_opponent_field_state: battleship.FieldState):
+        field_with_untouched_cells = actual_opponent_field_state.ship_field_matrix & (actual_opponent_field_state.state_matrix == battleship.CellState.UNTOUCHED.value)
         field_with_untouched_cells_2d = torch.tensor(
-                actual_opponent_field_state.ship_field_matrix
-                & (actual_opponent_field_state.state_matrix == battleship.CellState.UNTOUCHED.value),
-                dtype=torch.float
+                field_with_untouched_cells.astype('float32')
         )
         field_with_untouched_cells_1d = field_with_untouched_cells_2d.view(-1)
         self.actual_field_with_untouched_ship_cells_history.append(field_with_untouched_cells_1d)

@@ -24,6 +24,7 @@ def build_arg_parser():
     parser.add_argument("--game_field_size", default=6, type=int, help="size of the playing field.")
     parser.add_argument("--ship_sizes", default=[4], type=int, nargs=3, help="ship sizes")
     parser.add_argument("--ship_counts", default=[2], type=int, nargs=3, help="ship count per size")
+    
     parser.add_argument("--epochs", default=1, type=int, help="number of epochs to train after each episode.")
     parser.add_argument("--history_size", default=200, type=int,
                         help="number of recent episodes to remember for training.")
@@ -33,6 +34,7 @@ def build_arg_parser():
     parser.add_argument("--learning_rate", default=0.001, type=float, help="Learning rate for optimizer")
     parser.add_argument("--network_type", default='ResNet', type=str,
                         choices=['ResNet', 'CNN'], help="the type of network the agent uses")
+
     parser.add_argument("--results_csv_path",
                         default=os.path.join(CURRENT_DIRECTORY, f'results/training_results_{datetime.now()}.csv'),
                         type=str, help="the path where the training results CSV file will be stored.")
@@ -64,7 +66,7 @@ def save_training_results(results_per_episode, path):
 
 def save_network_parameters(network: nn.Module, optimizer, model_save_dir):
     make_sure_dir_exists(model_save_dir)
-    file_name = f'model_{datetime.now()}.torch'
+    file_name = f'model_{datetime.now().strftime("%H-%M-%S")}.torch'
     torch.save(
         {"network_state_dict": network.state_dict(),
          "optimizer_state_dict": optimizer.state_dict()},
@@ -181,7 +183,6 @@ def main():
     try:
         for episode_i in range(args.episodes):
             game = Game(player_1=agent, player_2=RandomAgent(), game_configuration=game_configuration)
-            agent.train()
             episode_results = game.play_out()
 
             agent.train()
