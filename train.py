@@ -5,7 +5,7 @@ from torch.utils.data import TensorDataset, DataLoader
 
 from ai_agent import AIAgent
 from battleship import *
-from nnet import ResidualNNet
+from network import ResidualNNet
 
 import torch
 import torch.nn.functional as functional
