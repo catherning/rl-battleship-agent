@@ -45,6 +45,7 @@ def build_arg_parser():
                         type=str, help="the path where the model's learned parameters will be stored.")
     parser.add_argument("--eval", action='store_true', help="Evaluate instead of training")
     parser.add_argument("--eval_num_games", action='store', type=int, default=150, help="Evaluate instead of training")
+    parser.add_argument("--verbose", action='store_true', help="Print the game from p1's perspective")
     return parser
 
 
@@ -81,7 +82,10 @@ def save_network_parameters(network: nn.Module, optimizer, model_save_dir):
 def load_network_parameters(path, model, optimizer=None):
     if not os.path.exists(path):
         raise Exception(f"{path} doesn't exist.")
-    saved_model = torch.load(path)
+    if torch.cuda.is_available():
+        saved_model = torch.load(path, map_location='cuda')
+    else:
+        saved_model = torch.load(path, map_location='cpu')
     model.load_state_dict(saved_model["network_state_dict"])
     if optimizer is not None:
         optimizer.load_state_dict(saved_model['optimizer_state_dict'])
@@ -155,7 +159,8 @@ def main():
 
     game_configuration = GameConfiguration(
         field_size=args.game_field_size,
-        ship_sizes=args.ship_sizes, ship_counts=args.ship_counts
+        ship_sizes=args.ship_sizes, ship_counts=args.ship_counts,
+        verbose=args.verbose,
     )
 
     agent = AIAgent(agent_network, args.history_size)

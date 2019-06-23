@@ -85,6 +85,18 @@ class ResidualNNet(nn.Module):
             for _ in range(num_residual_blocks)
         ]
 
+        ###########################################
+        #    legacy code for old model support    #
+        self.value_conv_1 = create_cnn_layer(
+            in_filters=num_filters, out_filters=1,
+            filter_size=1, padding=calculate_padding_to_maintain_size(kernel_size=1)
+        )
+        self.value_out_layer = nn.Sequential(nn.Linear(self.game_field_size ** 2, value_out_dims),
+                                             nn.ReLU(),
+                                             nn.Linear(value_out_dims, 1),
+                                             nn.Tanh())
+        ###########################################
+
         self.policy_conv_1 = create_cnn_layer(
             in_filters=num_filters, out_filters=1,
             filter_size=1, padding=calculate_padding_to_maintain_size(kernel_size=1)
@@ -102,20 +114,15 @@ class ResidualNNet(nn.Module):
 
         return output
 
-    def policy_output_layer(self, x):
-        activ_1 = self.policy_conv_1(x)
-
-        flatt_2 = activ_1.view(activ_1.shape[0], -1)
-        a_prob = self.policy_output_layer(flatt_2)
-
-        return a_prob
-
     def forward(self, input_):
         residuals = self.convolutional_block(input_)
 
         for residual_block in self.residual_blocks:
             residuals = residual_block(residuals)
 
-        policy = self.policy_output_layer(residuals)
+        activ_1 = self.policy_conv_1(residuals)
+
+        flatt_2 = activ_1.view(activ_1.shape[0], -1)
+        policy = self.policy_output_layer(flatt_2)
 
         return policy
