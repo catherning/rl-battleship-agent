@@ -18,15 +18,6 @@ def convert_cell_states_to_channels(cell_state_tensor):
     return output
 
 
-def sample_policy_matrix(policy_matrix: torch.Tensor, num_samples=1):
-    height, width = policy_matrix.shape
-    policy_1d = policy_matrix.view(-1)
-    sample_1d_index = torch.multinomial(policy_1d, num_samples=num_samples)
-    sample_y_index = torch.floor(sample_1d_index / width)
-    sample_x_index = sample_1d_index % width
-    return sample_y_index, sample_x_index
-
-
 def remove_impossible_moves(policy_1d: torch.Tensor, opponent_field_state_tensor_1d: torch.Tensor):
     possible_firing_targets = opponent_field_state_tensor_1d == battleship.CellState.UNTOUCHED.value
 

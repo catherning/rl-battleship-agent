@@ -86,14 +86,6 @@ def load_network_parameters(path, model, optimizer=None):
     if optimizer is not None:
         optimizer.load_state_dict(saved_model['optimizer_state_dict'])
 
-# todo:
-#     - improve experience history keeping
-#     - add actual ship positions to history
-#     - define loss as sum of cross entropy between policy and each actual ship position
-#     - add MC search for actual probabilities of ship positions based on discovered ships
-#     - move evaluation to different file
-
-
 def build_dataset(state_history, actual_untouched_ship_indices_history):
     """
 

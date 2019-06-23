@@ -2,11 +2,9 @@ import random
 import re
 from copy import deepcopy
 from enum import Enum
-from typing import List, Sized
+from typing import List
 
 import numpy as np
-
-import ai_agent
 
 
 class Player(object):
@@ -297,9 +295,6 @@ class Game(object):
         Play out a full game and return the result.
         :return:
         """
-        # players take turns firing at their opponent
-        # if a full ship has been hit, the owner of the ship must announce this
-
         game_finished = False
         winner = None
         num_turns = 0
@@ -352,9 +347,8 @@ class Tournament(object):
         if verbose:
             print('Starting tournament..')
         for i in range(self.num_games):
-            last_game_verbose = (i == self.num_games-1)
             game = Game(player_1=self.player_1, player_2=self.player_2, game_configuration=self.game_configuration)
-            game_result = game.play_out(verbose = last_game_verbose)
+            game_result = game.play_out()
             tournament_results.append(game_result)
             if verbose:
                 print(f'Game {i} winner = {game_result.winner}')

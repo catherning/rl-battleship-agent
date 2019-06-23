@@ -1,7 +1,5 @@
 import sys
 
-import numpy as np
-import torch
 import torch.nn as nn
 import torch.nn.functional as functional
 
@@ -60,20 +58,6 @@ class ResidualBlock(nn.Module):
                                           nn.BatchNorm2d(num_filters))
 
     def forward(self, x):
-        """
-        Each residual block applies the following modules sequentially to its input:
-        1. A convolution of 256 filters of kernel size 3 × 3 with stride 1
-        2. Batch normalisation
-        3. A rectifier non-linearity
-        4. A convolution of 256 filters of kernel size 3 × 3 with stride 1
-        5. Batch normalisation
-        6. A skip connection that adds the input to the block
-        7. A rectifier non-linearity
-
-        :param x:
-        :return:
-        """
-
         output_layer1 = self.res_block_l1(x)
         output_layer2 = self.res_block_l2(output_layer1)
         output_layer2 += x
@@ -92,7 +76,6 @@ class ResidualNNet(nn.Module):
 
         self.game_field_size = game_field_size
 
-        # Model
         self.conv_block = create_cnn_layer(
             in_filters=3, out_filters=num_filters,
             filter_size=filter_size, padding=calculate_padding_to_maintain_size(kernel_size=filter_size))
@@ -101,16 +84,6 @@ class ResidualNNet(nn.Module):
             ResidualBlock(self.num_filters, self.filter_size)
             for _ in range(num_residual_blocks)
         ]
-
-        # XXX Not used anymore, but to keep if we want to load older models
-        self.value_conv_1 = create_cnn_layer(
-            in_filters=num_filters, out_filters=1,
-            filter_size=1, padding=calculate_padding_to_maintain_size(kernel_size=1)
-        )
-        self.value_out_layer = nn.Sequential(nn.Linear(self.game_field_size ** 2, value_out_dims),
-                                             nn.ReLU(),
-                                             nn.Linear(value_out_dims, 1),
-                                             nn.Tanh())
 
         self.policy_conv_1 = create_cnn_layer(
             in_filters=num_filters, out_filters=1,
@@ -124,31 +97,12 @@ class ResidualNNet(nn.Module):
             nn.Softmax(),
         )
 
-
     def convolutional_block(self, input_):
-        """
-        1. A convolution of 256 filters of kernel size 3 × 3 with stride 1
-        2. Batch normalisation 18
-        3. A rectifier non-linearity
-        """
-
-        batch_size = input_.shape[0]
-        x = input_  # .reshape((batch_size, 1, self.game_field_size, self.game_field_size))
-        output = self.conv_block(x)
+        output = self.conv_block(input_)
 
         return output
 
-    def policy_head(self, x):
-        """
-        1. A convolution of 2 filters of kernel size 1 × 1 with stride 1
-        2. Batch normalisation
-        3. A rectifier non-linearity
-        4. A fully connected linear layer that outputs a vector of size 19**2 + 1 = 362 corresponding to
-           logit probabilities for all intersections and the pass move
-
-        :param x:
-        :return:
-        """
+    def policy_output_layer(self, x):
         activ_1 = self.policy_conv_1(x)
 
         flatt_2 = activ_1.view(activ_1.shape[0], -1)
@@ -157,22 +111,11 @@ class ResidualNNet(nn.Module):
         return a_prob
 
     def forward(self, input_):
-        """
-        Network described in DeepMind paper (pp 27-29)
-
-        https://deepmind.com/documents/119/agz_unformatted_nature.pdf
-
-        dual-res:
-        The network contains a 20-block residual tower, as described above, followed by
-        a policy head. This is the architecture used in AlphaGo Zero
-
-        """
-
         residuals = self.convolutional_block(input_)
 
         for residual_block in self.residual_blocks:
             residuals = residual_block(residuals)
 
-        a_prob = self.policy_head(residuals)
+        policy = self.policy_output_layer(residuals)
 
-        return a_prob
+        return policy
