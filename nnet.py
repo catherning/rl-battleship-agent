@@ -1,157 +1,157 @@
-import os
 import sys
 
 import numpy as np
-from keras.layers import Conv2D, BatchNormalization, Activation, Reshape, Dropout, Flatten, Dense, Add
-from keras.models import *
-from keras.optimizers import Adam
+import torch
+import torch.nn as nn
+import torch.nn.functional as functional
 
 sys.path.append('..')
 
 
-class NNet:
-    def __init__(self, field_size):
-        self.field_size = field_size
-        self.action_size = field_size ** 2
+def pad_2d(input_, padding, k_h, k_w, s_h=1, s_w=1):
+    """
+    Adds padding like in Tensorflow/Keras for Conv2D
+    https://gist.github.com/Ujjwal-9/e13f163d8d59baa40e741fc387da67df
 
-        # Model hyper-parameters
-        self.num_channels = 256
-        self.filter_size = 3
+    :param input_:
+    :param padding: either valid or same
+    :param k_h: kernel_height
+    :param k_w: kernel_width
+    :param s_h: stride_height
+    :param s_w: stride_width
+    :return:
+    """
+    if padding == 'valid':
+        return input_
+    elif padding == 'same':
+        in_height, in_width = input_.shape[2], input_.shape[3]
+        out_height = int(np.ceil(float(in_height) / float(s_h)))
+        out_width = int(np.ceil(float(in_width) / float(s_w)))
 
-        # Training
-        self.epochs = 1 #10
-        self.batch_size = 64
-        self.adam_lr = 1e-3
-
-        self.input_layer = Input(shape=(self.field_size, self.field_size,3))
-        self.model = None
-
-    def cnn_layer(self, x, num_channels=None, filter_size=None, activation='linear', padding='same'):
-
-        if num_channels is None:
-            num_channels = self.num_channels
-        if filter_size is None:
-            filter_size = self.filter_size
-
-        conv2d_1 = Conv2D(num_channels, filter_size,
-                          activation=activation, padding=padding)(x)
-        bnorm_1 = BatchNormalization(axis=3)(conv2d_1)
-        a_conv1 = Activation('relu')(bnorm_1)
-        return a_conv1
-
-    def train(self, input_fields, target_a_prob, target_values):
-        """
-        Train the network with provided data
-        """
-        # input_fields, target_a_prob, target_values = list(zip(*examples))
-
-        # Redundant ?
-        input_fields = np.asarray(input_fields)
-        target_a_prob = np.asarray(target_a_prob)
-
-        target_values = np.asarray(target_values)
-
-        self.model.fit(x=input_fields, y=[
-            target_a_prob, target_values], batch_size=self.batch_size, epochs=self.epochs)
-
-    def predict(self, field):
-        """
-        Given cell, calculate where to step next from the given cell,
-        output most probable action and value for the next state
-        """
-
-        field = field[np.newaxis, :, :]
-        a_prob, value = self.model.predict(field)
-        return a_prob[0], value[0]
-
-    def save_checkpoint(self, folder='checkpoint', filename='checkpoint.pth.tar'):
-        filepath = os.path.join(folder, filename)
-        if not os.path.exists(folder):
-            print(
-                "Checkpoint Directory does not exist! Making directory {}".format(folder))
-            os.mkdir(folder)
-        else:
-            print("Checkpoint Directory exists! ")
-        self.model.save_weights(filepath)
-
-    def load_checkpoint(self, folder='checkpoint', filename='checkpoint.pth.tar'):
-        filepath = os.path.join(folder, filename)
-        if not os.path.exists(filepath):
-            raise ("No model in path {}".format(filepath))
-        self.model.load_weights(filepath)
+        pad_along_height = max((out_height - 1) * s_h + k_h - in_height, 0)
+        pad_along_width = max((out_width - 1) * s_w + k_w - in_width, 0)
+        pad_top = pad_along_height // 2
+        pad_bottom = pad_along_height - pad_top
+        pad_left = pad_along_width // 2
+        pad_right = pad_along_width - pad_left
+        output = functional.pad(input_, (pad_left, pad_right, pad_top, pad_bottom))
+        return output
 
 
-class CNNet(NNet):
+def calculate_padding_to_maintain_size(kernel_size):
+    """
+    Calculate padding assuming that stride == 1
+    """
+    return int((kernel_size - 1) / 2)
 
-    def __init__(self, field_state):
-        super().__init__(field_state)
 
-        self.dropout = 0.3  # only CNN
+def create_cnn_layer(in_filters, out_filters, filter_size, padding):
+    """
+    Create a Sequential module that contains a Conv2d, BatchNorm2d, and ReLU layer
 
-        self.a_prob, self.values = self.cnn_net()
+    :param in_filters:
+    :param out_filters:
+    :param filter_size:
+    :param padding:
+    :return:
+    """
+    # padding = calculate_padding_to_maintain_size(in_size)
+    return nn.Sequential(nn.Conv2d(in_filters, out_filters, filter_size, padding=padding),
+                         nn.BatchNorm2d(out_filters),
+                         nn.ReLU())
 
-        self.model = Model(inputs=self.input_layer, outputs=[
-            self.a_prob, self.values])
-        self.model.compile(loss=['categorical_crossentropy',
-                                 'mean_squared_error'], optimizer=Adam(self.adam_lr))
 
-    def cnn_net(self):
+def create_dense_layer(in_dim, out_dim, dropout):
+    """
+    Create a Sequential module that contains a Linear, BatchNorma1d, ReLU, and Dropout layer
+
+    :param in_dim:
+    :param out_dim:
+    :param dropout:
+    :return:
+    """
+    return nn.Sequential(nn.Linear(in_dim, out_dim),
+                         nn.BatchNorm1d(out_dim),
+                         nn.ReLU(),
+                         nn.Dropout(p=dropout))
+
+
+class CNNet(nn.Module):
+    def __init__(self, game_field_size, num_filters=256, filter_size=3):
+        super().__init__()
+
+        self.dropout = 0.3
+        self.cnn_out_dim = 1024
+        self.dense_in_dim = 512  # 1024
+        self.dense_out_dim = 256  # 512
+        self.filter_size = filter_size
+        self.num_filters = num_filters
+        self.game_field_size = game_field_size
+        self.action_dims = game_field_size * game_field_size
+
+        # Model
+        self.conv_1 = create_cnn_layer(1, self.num_filters, self.filter_size,
+                                       padding=calculate_padding_to_maintain_size(kernel_size=filter_size))
+        self.conv_2 = create_cnn_layer(self.num_filters, self.num_filters, self.filter_size,
+                                       padding=calculate_padding_to_maintain_size(kernel_size=filter_size))
+        self.conv_3 = create_cnn_layer(self.num_filters, self.num_filters, self.filter_size,
+                                       padding=calculate_padding_to_maintain_size(kernel_size=filter_size))
+        self.conv_4 = create_cnn_layer(self.num_filters, self.num_filters, self.filter_size,
+                                       padding=calculate_padding_to_maintain_size(kernel_size=filter_size))
+
+        # 1024 is original in_dim
+        self.dense_l1 = create_dense_layer(self.cnn_out_dim, self.dense_in_dim, self.dropout)
+        self.dense_l2 = create_dense_layer(self.dense_in_dim, self.dense_out_dim, self.dropout)
+        self.probabilities = nn.Sequential(nn.Linear(self.dense_out_dim, self.action_dims), nn.Softmax())
+
+        print(self)
+
+    def forward(self, input_):
         """
         Regular CNN network
 
-        :return: [a_prob, values]
+        :return: a_prob
         """
 
-        # x = Reshape((self.field_size, self.field_size, 3))(self.input_layer)
+        batch_size = input_.shape[0]
+        x = input_.reshape((batch_size, 1, self.game_field_size, self.game_field_size))
+        if batch_size == 1:
+            x = torch.cat([x, x])
 
-        a_conv1 = self.cnn_layer(self.input_layer)
-        a_conv2 = self.cnn_layer(a_conv1)
-        a_conv3 = self.cnn_layer(a_conv2, padding='valid')
-        a_conv4 = self.cnn_layer(a_conv3, padding='valid')
+        # Same padding
+        x = pad_2d(x, "same", self.filter_size, self.filter_size)
+        a_conv = self.conv_1(x)
+        a_conv = pad_2d(a_conv, "same", self.filter_size, self.filter_size)
+        a_conv = self.conv_2(a_conv)
 
-        a_conv4_flat = Flatten()(a_conv4)
+        # Valid padding
+        a_conv = self.conv_3(a_conv)
+        a_conv = self.conv_4(a_conv)
 
-        temp1 = Dense(1024)(a_conv4_flat)
-        temp2 = BatchNormalization(axis=1)(temp1)
-        dense_1 = Dropout(self.dropout)(Activation('relu')( temp2 ))
-        dense_2 = Dropout(self.dropout)(Activation('relu')(
-            BatchNormalization(axis=1)(Dense(512)(dense_1))))
+        a_conv = a_conv.view(a_conv.shape[0], -1)
 
-        a_prob = Dense(self.action_size, activation='softmax',
-                       name='a_prob')(dense_2)
-        values = Dense(1, activation='tanh', name='values')(dense_2)
+        dense = self.dense_l1(a_conv)
+        dense = self.dense_l2(dense)
 
-        return [a_prob, values]
+        a_prob = self.probabilities(dense)
+
+        return a_prob
 
 
-class ResidualNNet(NNet):
+class ResidualBlock(nn.Module):
+    def __init__(self, num_filters, filter_size):
+        super().__init__()
 
-    def __init__(self, field_state):
-        super().__init__(field_state)
+        self.num_filters = num_filters
+        self.filter_size = filter_size
 
-        self.num_residual = 3  # 19 #39 # only residual
-        self.value_head_dense = 256  # only residual
+        padding = calculate_padding_to_maintain_size(filter_size)
 
-        self.a_prob, self.values = self.residual_net()
+        self.res_block_l1 = create_cnn_layer(num_filters, num_filters, filter_size, padding)
+        self.res_block_l2 = nn.Sequential(nn.Conv2d(num_filters, num_filters, filter_size, padding=padding),
+                                          nn.BatchNorm2d(num_filters))
 
-        self.model = Model(inputs=self.input_layer, outputs=[
-            self.a_prob, self.values])
-        self.model.compile(loss=['categorical_crossentropy',
-                                 'mean_squared_error'], optimizer=Adam(self.adam_lr))
-
-    def convolutional_block(self):
-        """
-        1. A convolution of 256 filters of kernel size 3 × 3 with stride 1
-        2. Batch normalisation 18
-        3. A rectifier non-linearity
-        """
-
-        # x = Reshape((self.field_size, self.field_size, 3))(self.input_layer)
-        output = self.cnn_layer(self.input_layer)
-
-        return output
-
-    def residual_block(self, x):
+    def forward(self, x):
         """
         Each residual block applies the following modules sequentially to its input:
         1. A convolution of 256 filters of kernel size 3 × 3 with stride 1
@@ -166,34 +166,69 @@ class ResidualNNet(NNet):
         :return:
         """
 
-        output_layer1 = self.cnn_layer(x)
+        output_layer1 = self.res_block_l1(x)
+        output_layer2 = self.res_block_l2(output_layer1)
+        output_layer2 += x
+        activated_output = functional.relu(output_layer2)
 
-        convl_4 = Conv2D(self.num_channels, self.filter_size,
-                         activation='linear', padding='same')(output_layer1)
-        bnorm_5 = BatchNormalization(axis=3)(convl_4)
-        merge_6 = Add()([bnorm_5, x])
-        activ_7 = Activation('relu')(merge_6)
+        return activated_output
 
-        return activ_7
 
-    def value_head(self, x):
+class ResidualNNet(nn.Module):
+    def __init__(self, game_field_size, num_filters=256, filter_size=3, num_residual_blocks=3, value_out_dims=128):
+        super().__init__()
+
+        self.game_field_size = game_field_size
+        self.num_filters = num_filters
+        self.filter_size = filter_size
+
+        self.game_field_size = game_field_size
+
+        # Model
+        self.conv_block = create_cnn_layer(
+            in_filters=3, out_filters=num_filters,
+            filter_size=filter_size, padding=calculate_padding_to_maintain_size(kernel_size=filter_size))
+
+        self.residual_blocks = [
+            ResidualBlock(self.num_filters, self.filter_size)
+            for _ in range(num_residual_blocks)
+        ]
+
+        # XXX Not used anymore, but to keep if we want to load older models
+        self.value_conv_1 = create_cnn_layer(
+            in_filters=num_filters, out_filters=1,
+            filter_size=1, padding=calculate_padding_to_maintain_size(kernel_size=1)
+        )
+        self.value_out_layer = nn.Sequential(nn.Linear(self.game_field_size ** 2, value_out_dims),
+                                             nn.ReLU(),
+                                             nn.Linear(value_out_dims, 1),
+                                             nn.Tanh())
+
+        self.policy_conv_1 = create_cnn_layer(
+            in_filters=num_filters, out_filters=1,
+            filter_size=1, padding=calculate_padding_to_maintain_size(kernel_size=1)
+        )
+
+        num_cells_in_game_field = game_field_size * game_field_size
+        action_dims = num_cells_in_game_field
+        self.policy_output_layer = nn.Sequential(
+            nn.Linear(in_features=num_cells_in_game_field, out_features=action_dims),
+            nn.Softmax(),
+        )
+
+
+    def convolutional_block(self, input_):
         """
-        1. A convolution of 1 filter of kernel size 1 × 1 with stride 1
-        2. Batch normalisation
+        1. A convolution of 256 filters of kernel size 3 × 3 with stride 1
+        2. Batch normalisation 18
         3. A rectifier non-linearity
-        4. A fully connected linear layer to a hidden layer of size 256
-        5. A rectifier non-linearity
-        6. A fully connected linear layer to a scalar
-        7. A tanh non-linearity outputting a scalar in the range [−1, 1]
         """
 
-        activ_3 = self.cnn_layer(x, num_channels=1, filter_size=1)
+        batch_size = input_.shape[0]
+        x = input_  # .reshape((batch_size, 1, self.game_field_size, self.game_field_size))
+        output = self.conv_block(x)
 
-        flatt_4 = Flatten()(activ_3)
-        dense_5 = Dense(self.value_head_dense, activation='relu')(flatt_4)
-        dense_6 = Dense(1, activation='tanh', name='value_head')(dense_5)
-
-        return dense_6
+        return output
 
     def policy_head(self, x):
         """
@@ -202,17 +237,18 @@ class ResidualNNet(NNet):
         3. A rectifier non-linearity
         4. A fully connected linear layer that outputs a vector of size 19**2 + 1 = 362 corresponding to
            logit probabilities for all intersections and the pass move
+
+        :param x:
+        :return:
         """
+        activ_1 = self.policy_conv_1(x)
 
-        activ_3 = self.cnn_layer(x, num_channels=1, filter_size=1)
+        flatt_2 = activ_1.view(activ_1.shape[0], -1)
+        a_prob = self.policy_output_layer(flatt_2)
 
-        flatt_4 = Flatten()(activ_3)
-        dense_4 = Dense(self.action_size, activation='softmax',
-                        name='policy_head')(flatt_4)
+        return a_prob
 
-        return dense_4
-
-    def residual_net(self):
+    def forward(self, input_):
         """
         Network described in DeepMind paper (pp 27-29)
 
@@ -220,18 +256,15 @@ class ResidualNNet(NNet):
 
         dual-res:
         The network contains a 20-block residual tower, as described above, followed by
-        both a policy head and a value head. This is the architecture used in AlphaGo Zero
+        a policy head. This is the architecture used in AlphaGo Zero
 
         """
 
-        conv_block = self.convolutional_block()
+        residuals = self.convolutional_block(input_)
 
-        residuals = self.residual_block(conv_block)
+        for residual_block in self.residual_blocks:
+            residuals = residual_block(residuals)
 
-        for i in range(0, self.num_residual):
-            residuals = self.residual_block(residuals)
-
-        values = self.value_head(residuals)
         a_prob = self.policy_head(residuals)
 
-        return [a_prob, values]
+        return a_prob
