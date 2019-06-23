@@ -180,7 +180,7 @@ class FieldState(object):
                 if cell_state == CellState.HIT:
                     string += 'x'  # hit ship cell
                 elif cell_state == CellState.MISSED:
-                    string += '@'  # a hit location with no ship
+                    string += '*'  # a hit location with no ship
                 elif cell_occupancy == CellOccupancy.HAS_SHIP:
                     string += 'o'  # a untouched ship cell
                 else:
@@ -231,11 +231,13 @@ class GameConfiguration(object):
             ship_sizes: List[int],
             ship_counts: List[int],
             num_random_attempts=50,
+            verbose=False,
     ):
         self.field_size = field_size
         self.ship_sizes = ship_sizes
         self.ship_counts = ship_counts
         self.num_random_attempts = num_random_attempts
+        self.verbose = verbose
 
 
 class Game(object):
@@ -248,6 +250,7 @@ class Game(object):
         self._player_1 = player_1
         self._player_2 = player_2
         self._active_player = player_1
+        self._verbose = game_configuration.verbose
 
         # The game of battleship is kind of like two different games played at the same time. Both players have a
         # FieldState which comprises of their ships and the shots that have been fired at it. In each turn, a player
@@ -285,7 +288,11 @@ class Game(object):
     def active_player(self):
         return self._active_player
 
-    def play_out(self, verbose=False):
+    def log(self, *args):
+        if self._verbose:
+            print(*args)
+
+    def play_out(self):
         """
         Play out a full game and return the result.
         :return:
@@ -300,6 +307,9 @@ class Game(object):
         while not game_finished:
             num_turns += 1
 
+            self.log(f'Turn {num_turns}')
+            self.log(self.field_state_per_player[self.non_active_player])
+
             for _ in range(2):
                 if type(self.active_player) is HumanPlayer:
                     print(self.field_state_per_player[self.active_player])
@@ -312,11 +322,6 @@ class Game(object):
                 old_field_state = opponent_field.copy()
                 succeeded = opponent_field.fire_at_target(y=firing_target_y, x=firing_target_x)
                 self.active_player.inform_about_result(succeeded, old_field_state)
-
-                if verbose and type(self.active_player) is ai_agent.AIAgent:
-                    print(f"Turn {num_turns}")
-                    print(opponent_field)
-                    print()
 
                 if not opponent_field.is_alive:
                     if game_finished:
