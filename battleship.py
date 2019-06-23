@@ -6,6 +6,8 @@ from typing import List, Sized
 
 import numpy as np
 
+import ai_agent
+
 
 class Player(object):
     def __init__(self):
@@ -283,7 +285,7 @@ class Game(object):
     def active_player(self):
         return self._active_player
 
-    def play_out(self):
+    def play_out(self, verbose=False):
         """
         Play out a full game and return the result.
         :return:
@@ -310,6 +312,11 @@ class Game(object):
                 old_field_state = opponent_field.copy()
                 succeeded = opponent_field.fire_at_target(y=firing_target_y, x=firing_target_x)
                 self.active_player.inform_about_result(succeeded, old_field_state)
+
+                if verbose and type(self.active_player) is ai_agent.AIAgent:
+                    print(f"Turn {num_turns}")
+                    print(opponent_field)
+                    print()
 
                 if not opponent_field.is_alive:
                     if game_finished:
@@ -340,9 +347,11 @@ class Tournament(object):
         if verbose:
             print('Starting tournament..')
         for i in range(self.num_games):
+            last_game_verbose = (i == self.num_games-1)
             game = Game(player_1=self.player_1, player_2=self.player_2, game_configuration=self.game_configuration)
-            game_result = game.play_out()
+            game_result = game.play_out(verbose = last_game_verbose)
             tournament_results.append(game_result)
             if verbose:
                 print(f'Game {i} winner = {game_result.winner}')
+
         return tournament_results

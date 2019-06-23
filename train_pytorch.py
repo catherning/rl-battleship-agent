@@ -31,6 +31,7 @@ def build_arg_parser():
     parser.add_argument("--batch_size", default=500, type=int, help="Batch size to use during training.")
     parser.add_argument("--display_freq", default=1, type=int, help="Display frequency")
     parser.add_argument("--save_freq", default=5, type=int, help="Save every x episodes.")
+    parser.add_argument("--num_residual_blocks", default=3, type=int, help="Number of residual blocks.")
     parser.add_argument("--learning_rate", default=0.001, type=float, help="Learning rate for optimizer")
     parser.add_argument("--network_type", default='ResNet', type=str,
                         choices=['ResNet', 'CNN'], help="the type of network the agent uses")
@@ -56,9 +57,9 @@ def make_sure_dir_exists(path):
         os.makedirs(dir)
 
 
-def save_training_results(results_per_episode, path):
+def save_results(results_per_episode, path):
     make_sure_dir_exists(path)
-    print(f'Saving training results to {path}')
+    print(f'Saving results to {path}')
     results_data_frame = pd.DataFrame([results.result_dict for results in results_per_episode])
     results_data_frame.to_csv(path)
     print('Saved')
@@ -139,7 +140,7 @@ def train(network: ResidualNNet, optimizer,
     return mean_loss
 
 
-def evaluate(agent: AIAgent, game_configuration, num_games):
+def evaluate(agent: AIAgent, game_configuration, num_games, path):
     agent.eval()
     random_agent = RandomAgent()
     tournament = Tournament(player_1=agent, player_2=random_agent, game_configuration=game_configuration,
@@ -148,6 +149,8 @@ def evaluate(agent: AIAgent, game_configuration, num_games):
     agent_win_count = sum(result.winner == agent for result in results)
     random_win_count = sum(result.winner == random_agent for result in results)
     draw_count = len(results) - agent_win_count - random_win_count
+    
+    save_results(results_per_episode=results, path=path)
 
     print(f'agent wins = {agent_win_count}; random wins = {random_win_count}; draws = {draw_count}')
 
@@ -159,7 +162,7 @@ def main():
         torch.set_default_tensor_type(torch.cuda.FloatTensor)
 
     if args.network_type == 'ResNet':
-        agent_network = ResidualNNet(args.game_field_size)
+        agent_network = ResidualNNet(args.game_field_size,num_residual_blocks=args.num_residual_blocks)
     else:  # args.network_type == "cnn":
         agent_network = CNNet(args.game_field_size)
 
@@ -172,10 +175,12 @@ def main():
     optimizer = torch.optim.Adam(agent_network.parameters(), lr=args.learning_rate)
 
     if args.load_model is not None:
+        if args.eval:
+            optimizer = None
         load_network_parameters(args.load_model, agent_network, optimizer)
 
     if args.eval:
-        evaluate(agent, game_configuration, args.eval_num_games)
+        evaluate(agent, game_configuration, args.eval_num_games, args.results_csv_path)
         return
 
     results_per_episode = []
@@ -205,11 +210,11 @@ def main():
                       f'winner = {episode_results.winner}')
 
             if episode_i % args.save_freq == 0 and episode_i > 0:
-                save_training_results(results_per_episode=results_per_episode, path=args.results_csv_path)
+                save_results(results_per_episode=results_per_episode, path=args.results_csv_path)
                 save_network_parameters(agent_network, optimizer, args.model_save_dir)
     except KeyboardInterrupt:
         print('Keyboard interrupt: stopping training..')
-        save_training_results(results_per_episode=results_per_episode, path=args.results_csv_path)
+        save_results(results_per_episode=results_per_episode, path=args.results_csv_path)
         save_network_parameters(agent_network, optimizer, args.model_save_dir)
 
 
