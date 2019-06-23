@@ -5,7 +5,7 @@ from torch.utils.data import TensorDataset, DataLoader
 
 from ai_agent import AIAgent
 from battleship import *
-from nnet import CNNet, ResidualNNet
+from nnet import ResidualNNet
 
 import torch
 import torch.nn.functional as functional
@@ -33,8 +33,6 @@ def build_arg_parser():
     parser.add_argument("--save_freq", default=5, type=int, help="Save every x episodes.")
     parser.add_argument("--num_residual_blocks", default=3, type=int, help="Number of residual blocks.")
     parser.add_argument("--learning_rate", default=0.001, type=float, help="Learning rate for optimizer")
-    parser.add_argument("--network_type", default='ResNet', type=str,
-                        choices=['ResNet', 'CNN'], help="the type of network the agent uses")
 
     parser.add_argument("--results_csv_path",
                         default=os.path.join(CURRENT_DIRECTORY, f'results/training_results_{datetime.now()}.csv'),
@@ -161,10 +159,7 @@ def main():
     if torch.cuda.is_available():
         torch.set_default_tensor_type(torch.cuda.FloatTensor)
 
-    if args.network_type == 'ResNet':
-        agent_network = ResidualNNet(args.game_field_size,num_residual_blocks=args.num_residual_blocks)
-    else:  # args.network_type == "cnn":
-        agent_network = CNNet(args.game_field_size)
+    agent_network = ResidualNNet(args.game_field_size,num_residual_blocks=args.num_residual_blocks)
 
     game_configuration = GameConfiguration(
         field_size=args.game_field_size,
